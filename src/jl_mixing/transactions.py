@@ -26,6 +26,11 @@ def commit_new_directory(staged_directory: Path, destination: Path) -> None:
     Preserves the v1.4 ``before-directory-commit`` and
     ``after-directory-commit`` failure-injection contract. A failure after the
     rename removes only the directory created by this transaction.
+
+    The destination is required not to exist, so use ordinary rename semantics
+    rather than replacement semantics. This is equivalent on POSIX and avoids
+    Windows/SMB providers that reject directory replacement even when the
+    destination is absent.
     """
 
     if staged_directory.is_symlink() or not staged_directory.is_dir():
@@ -37,7 +42,12 @@ def commit_new_directory(staged_directory: Path, destination: Path) -> None:
 
     committed = False
     try:
-        os.replace(staged_directory, destination)
+        try:
+            os.rename(staged_directory, destination)
+        except OSError as exc:
+            raise JLMixingError(
+                f"Could not commit staged directory to {destination}: {exc}"
+            ) from exc
         committed = True
         if _fail_requested("after-directory-commit"):
             raise _injected_failure("after-directory-commit")

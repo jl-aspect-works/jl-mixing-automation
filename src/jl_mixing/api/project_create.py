@@ -121,6 +121,8 @@ def execute(request: ProjectApiRequest) -> tuple[dict[str, Any], int]:
         return _error_envelope(code, message, exc.exit_code, status="blocked"), exc.exit_code
     except JLMixingError as exc:
         return _error_envelope("INTERNAL_ERROR", str(exc), exc.exit_code), exc.exit_code
+    except OSError as exc:
+        return _error_envelope("FILESYSTEM_ERROR", str(exc), 1), 1
 
 
 def _parse_deliverables(value: str) -> list[str]:
