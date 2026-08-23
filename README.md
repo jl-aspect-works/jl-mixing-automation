@@ -28,9 +28,11 @@ The default workspace is `~/Music/Mixes/`. Projects live directly beneath `Clien
 
 ## Installation
 
+Use the version shown on the GitHub release in place of `<version>` below.
+
 ### Windows
 
-For the release candidate, download and extract `jl-mixing-2.1.0-rc.2-windows.zip`, then run:
+Download and extract `jl-mixing-<version>-windows.zip`, then run:
 
 ```powershell
 .\windows\install.ps1
@@ -50,8 +52,8 @@ The package includes its private Python runtime. The default installation is ben
 Choose the release archive for your architecture (`macos-x86_64` for Intel or `macos-arm64` for Apple Silicon) and extract it. The packages are unsigned and not notarized, so after verifying the release checksum remove quarantine recursively from the extracted folder before installing:
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.2
-cd /path/to/jl-mixing-2.1.0-rc.2
+xattr -dr com.apple.quarantine /path/to/jl-mixing-<version>
+cd /path/to/jl-mixing-<version>
 ./macos/install.sh
 ```
 
@@ -93,6 +95,6 @@ New records identify the current application release in `created_with` without c
 
 ## Documentation
 
-Start with [`docs/README.md`](docs/README.md), the [`v2.1 User Guide`](docs/USER_GUIDE.md), the [`Installation Guide`](docs/INSTALLATION_GUIDE.md), and the [`2.1 release notes`](docs/RELEASE_NOTES_V2.1.md).
+Start with [`docs/README.md`](docs/README.md), the [`v2.1 User Guide`](docs/USER_GUIDE.md), the [`Installation Guide`](docs/INSTALLATION_GUIDE.md), the [`Release Checklist`](docs/RELEASE_CHECKLIST.md), and the [`2.1 release notes`](docs/RELEASE_NOTES_V2.1.md).
 
 JL Mixing Automation is licensed under Apache-2.0. See [LICENSE](LICENSE).
