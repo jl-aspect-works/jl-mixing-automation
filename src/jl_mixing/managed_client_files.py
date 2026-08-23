@@ -288,7 +288,7 @@ def _stage_source(source: SourceFile, stage: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     if source.zip_member is None:
         assert source.source_path is not None
-        shutil.copy2(source.source_path, target)
+        shutil.copyfile(source.source_path, target)
     else:
         assert source.source_path is not None
         with zipfile.ZipFile(source.source_path) as archive, archive.open(source.zip_member) as input_stream, target.open("wb") as output_stream:
@@ -356,7 +356,7 @@ def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, 
                 copy_source = staged[item["source_relative_path"]]
             writes.mkdir(parents=True, exist_ok=True)
             temp_dest = writes / f"write-{position}.tmp"
-            shutil.copy2(copy_source, temp_dest)
+            shutil.copyfile(copy_source, temp_dest)
             os.replace(temp_dest, destination)
             changed_original = changed_original or item["area"] == "original_delivery"
             changed_audio = changed_audio or item["area"] == "audio_prep"
