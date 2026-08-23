@@ -4,7 +4,7 @@ JL Mixing Automation 2.1 supplies the authoritative workflow capabilities used b
 
 ## Installation
 
-Download the release archive for your platform from the Assets section and verify its accompanying SHA-256 checksum before installing.
+Download the release archive for your platform from the Assets section and verify its accompanying SHA-256 checksum before installing. Replace `<version>` below with the version shown on the release, for example `2.1.0-rc.3`.
 
 ### macOS
 
@@ -16,8 +16,8 @@ Choose the archive that matches your Mac:
 The packages remain unsigned and not notarized. After verifying the checksum, remove quarantine recursively from the extracted release directory before running the installer:
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.2
-cd /path/to/jl-mixing-2.1.0-rc.2
+xattr -dr com.apple.quarantine /path/to/jl-mixing-<version>
+cd /path/to/jl-mixing-<version>
 ./macos/install.sh
 ```
 
@@ -29,7 +29,7 @@ jl-mixing --version
 
 ### Windows
 
-Download and extract `jl-mixing-2.1.0-rc.2-windows.zip`, then run:
+Download and extract `jl-mixing-<version>-windows.zip`, then run:
 
 ```powershell
 .\windows\install.ps1
@@ -99,4 +99,4 @@ Closing a revision is non-destructive; it does not delete the revision directory
 
 ## Release-candidate validation
 
-`2.1.0-rc.2` is intended for coordinated packaged validation with JL Mixing Studio `2.1.0-rc.2` on Windows and macOS before promotion to the stable 2.1 release.
+Prerelease versions of 2.1 are intended for coordinated packaged validation with the corresponding JL Mixing Studio 2.1 candidate on Windows and macOS before promotion to the stable 2.1 release.
