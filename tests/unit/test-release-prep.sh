@@ -32,6 +32,8 @@ for file in "$ROOT/README.md" "$ROOT/packaging/RELEASE_README.md" \
         grep -q 'Music/JL Mixing' "$file"
 done
 
+assert_file_exists "$ROOT/VERSION"
+assert_success "VERSION is supported SemVer" grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' "$ROOT/VERSION"
 assert_file_exists "$ROOT/API_VERSION"
 assert_file_exists "$ROOT/api/schemas/v1.0/system-info.schema.json"
 assert_file_exists "$ROOT/api/schemas/v1.0/operations/client-create.schema.json"
@@ -71,8 +73,6 @@ assert_file_exists "$ROOT/docs/RELEASE_NOTES_V1.5.md"
 assert_file_exists "$ROOT/docs/RELEASE_NOTES_V2.0.md"
 assert_file_exists "$ROOT/docs/RELEASE_NOTES_V2.1.md"
 assert_file_exists "$ROOT/docs/SCOPE_FREEZE_V1.2.md"
-assert_eq "2.1.0-rc.2" "$(sed -n '1p' "$ROOT/VERSION")" \
-    "v2.1.0-rc.2 application release version"
 assert_eq "1.0" "$(sed -n '1p' "$ROOT/API_VERSION")" \
     "Automation API version is independent"
 assert_contains "$(cat "$ROOT/.github/workflows/release.yml")" \
@@ -84,7 +84,7 @@ assert_contains "$(cat "$ROOT/.github/workflows/release.yml")" \
 assert_contains "$(cat "$ROOT/docs/INSTALLATION_GUIDE.md")" \
     'xattr -dr com.apple.quarantine .' "installation guide documents unsigned macOS quarantine handling"
 assert_contains "$(cat "$ROOT/docs/RELEASE_NOTES_V2.1.md")" \
-    'xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.2' "v2.1 release notes document bundled-runtime quarantine workaround"
+    '/path/to/jl-mixing-<version>' "v2.1 release notes use version-independent quarantine example"
 assert_contains "$(cat "$ROOT/docs/RELEASE_NOTES_V2.1.md")" \
     'Unblock-File .\windows\install.ps1' "v2.1 release notes document Windows downloaded-script unblock"
 assert_contains "$(cat "$ROOT/docs/USER_GUIDE.md")" \
