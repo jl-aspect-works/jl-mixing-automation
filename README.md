@@ -30,7 +30,7 @@ The default workspace is `~/Music/Mixes/`. Projects live directly beneath `Clien
 
 ### Windows
 
-For the release candidate, download and extract `jl-mixing-2.1.0-rc.1-windows.zip`, then run:
+For the release candidate, download and extract `jl-mixing-2.1.0-rc.2-windows.zip`, then run:
 
 ```powershell
 .\windows\install.ps1
@@ -50,8 +50,8 @@ The package includes its private Python runtime. The default installation is ben
 Choose the release archive for your architecture (`macos-x86_64` for Intel or `macos-arm64` for Apple Silicon) and extract it. The packages are unsigned and not notarized, so after verifying the release checksum remove quarantine recursively from the extracted folder before installing:
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.1
-cd /path/to/jl-mixing-2.1.0-rc.1
+xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.2
+cd /path/to/jl-mixing-2.1.0-rc.2
 ./macos/install.sh
 ```
 
