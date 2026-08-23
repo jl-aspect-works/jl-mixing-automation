@@ -16,8 +16,8 @@ Choose the archive that matches your Mac:
 The packages remain unsigned and not notarized. After verifying the checksum, remove quarantine recursively from the extracted release directory before running the installer:
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.1
-cd /path/to/jl-mixing-2.1.0-rc.1
+xattr -dr com.apple.quarantine /path/to/jl-mixing-2.1.0-rc.2
+cd /path/to/jl-mixing-2.1.0-rc.2
 ./macos/install.sh
 ```
 
@@ -29,7 +29,7 @@ jl-mixing --version
 
 ### Windows
 
-Download and extract `jl-mixing-2.1.0-rc.1-windows.zip`, then run:
+Download and extract `jl-mixing-2.1.0-rc.2-windows.zip`, then run:
 
 ```powershell
 .\windows\install.ps1
@@ -59,7 +59,7 @@ Linux/source installs require Bash, Python 3.10+ with `venv`, and jq.
 ## Highlights
 
 - Automation-owned Studio, client, and project metadata updates for Studio 2.1 editing workflows.
-- Managed Client Files import with plan/execute safety, per-file selection support, and stale-plan validation.
+- Managed Client Files import with plan/execute safety, per-file selection support, stale-plan validation, and NAS-safe content-only copy behavior on macOS shared workspaces.
 - Managed Audio Prep reset from the current Client Files source while preserving path-safety and transactional behavior.
 - Reversible revision Close/Reopen lifecycle so abandoned or mistaken revisions do not permanently hold a project in an attention state.
 - Reversible Unapprove support for approved revisions without deleting revision files or history.
@@ -99,4 +99,4 @@ Closing a revision is non-destructive; it does not delete the revision directory
 
 ## Release-candidate validation
 
-`2.1.0-rc.1` is intended for coordinated packaged validation with JL Mixing Studio 2.1 on Windows and macOS before promotion to the stable 2.1 release.
+`2.1.0-rc.2` is intended for coordinated packaged validation with JL Mixing Studio `2.1.0-rc.2` on Windows and macOS before promotion to the stable 2.1 release.
