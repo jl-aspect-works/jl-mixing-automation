@@ -72,6 +72,33 @@ class ClientApiTests(unittest.TestCase):
                 ["client.json", "Projects"],
             )
 
+    def test_explicit_studio_context_does_not_depend_on_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as unrelated:
+            studio = write_studio(Path(tmp))
+            proc = run_cli(
+                Path(unrelated),
+                "client",
+                "create",
+                "explicit-client",
+                "--json",
+                "--studio",
+                str(studio),
+                "--dry-run",
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.stderr, "")
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload["status"], "planned")
+            self.assertEqual(Path(payload["data"]["workspace_path"]), studio)
+            self.assertEqual(payload["data"]["client"]["id"], "explicit-client")
+
+    def test_system_info_advertises_explicit_client_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = run_cli(Path(tmp), "system-info", "--json")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertIn("client.create.explicit-context", payload["capabilities"])
+
     def test_success_commits_authoritative_client_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             studio = write_studio(Path(tmp))
