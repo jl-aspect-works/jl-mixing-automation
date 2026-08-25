@@ -7,13 +7,13 @@ import json
 import os
 import shutil
 import stat
-import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 from .errors import UnsafeOperationError, ValidationError
+from .transactions import create_staging_directory
 
 ORIGINAL_ROOT = Path("01_Client_Files") / "Original_Delivery"
 AUDIO_ROOT = Path("02_Audio_Preparation") / "Working_Audio"
@@ -319,7 +319,7 @@ def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, 
         )
         for data in plan["files"]
     }
-    transaction = Path(tempfile.mkdtemp(prefix=".jl-managed-import-", dir=project_root / "00_Admin"))
+    transaction = create_staging_directory(project_root / "00_Admin", ".jl-managed-import-")
     stage = transaction / "stage"
     backups = transaction / "backups"
     writes = transaction / "writes"

@@ -42,6 +42,28 @@ class ManagedClientFilesNasTests(unittest.TestCase):
             )
             self.assertFalse(any((project / "00_Admin").glob(".jl-managed-import-*")))
 
+    def test_import_stage_uses_normal_acl_inheritance(self):
+        """Managed import must not use tempfile private-directory permissions on NAS shares."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "Project"
+            (project / "00_Admin").mkdir(parents=True)
+            (project / "01_Client_Files" / "Original_Delivery").mkdir(parents=True)
+            (project / "02_Audio_Preparation" / "Working_Audio").mkdir(parents=True)
+            source = root / "10_Piano.wav"
+            source.write_bytes(b"audio-content")
+            plan = plan_import(project, "files", (source,))
+
+            with patch.object(
+                tempfile,
+                "mkdtemp",
+                side_effect=AssertionError("managed imports must inherit the parent ACL"),
+            ):
+                result = execute_plan(project, plan, {})
+
+            self.assertEqual([item["result"] for item in result["items"]], ["created", "created"])
+            self.assertFalse(any((project / "00_Admin").glob(".jl-managed-import-*")))
+
 
 if __name__ == "__main__":
     unittest.main()
