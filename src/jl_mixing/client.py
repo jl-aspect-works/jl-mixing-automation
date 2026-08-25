@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,7 +12,7 @@ from .errors import ContextError, UnsafeOperationError, ValidationError
 from .metadata import create_v11
 from .naming import sanitize_folder_name, title_from_slug
 from .paths import assert_no_case_insensitive_child_collision, assert_no_symlink_components
-from .transactions import commit_new_directory
+from .transactions import commit_new_directory, create_staging_directory
 from .validation import (
     require_bit_depth,
     require_deliverables,
@@ -141,7 +140,7 @@ def create_client(request: ClientCreateRequest) -> ClientCreateResult:
     if request.dry_run:
         return ClientCreateResult(destination, document, effective_cd, False)
 
-    stage = Path(tempfile.mkdtemp(prefix=f".{folder_name}.jl-stage-", dir=clients_root))
+    stage = create_staging_directory(clients_root, f".{folder_name}.jl-stage-")
     try:
         (stage / "Projects").mkdir()
         (stage / "client.json").write_text(
