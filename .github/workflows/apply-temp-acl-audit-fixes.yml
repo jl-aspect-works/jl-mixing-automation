@@ -1,0 +1,147 @@
+name: Apply temp ACL audit fixes
+
+on:
+  push:
+    branches:
+      - fix/managed-import-nas-acl
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/managed-import-nas-acl
+      - name: Apply audited ACL-safe temp primitive fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'marker not found in {path}: {old[:80]!r}')
+              text = text.replace(old, new, count)
+              p.write_text(text)
+
+          # Shared Python transaction primitives.
+          p = Path('src/jl_mixing/transactions.py')
+          text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          anchor = '''def commit_new_directory(staged_directory: Path, destination: Path) -> None:\n'''
+          helpers = '''def create_staging_file(parent: Path, prefix: str) -> tuple[int, Path]:\n    """Create an exclusive sibling file using normal ACL inheritance."""\n\n    if parent.is_symlink() or not parent.is_dir():\n        raise JLMixingError(f"Staging parent is missing or unsafe: {parent}")\n\n    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL\n    if hasattr(os, "O_BINARY"):\n        flags |= os.O_BINARY\n    for _ in range(32):\n        candidate = parent / f"{prefix}{uuid.uuid4().hex[:12]}"\n        try:\n            fd = os.open(candidate, flags, 0o666)\n        except FileExistsError:\n            continue\n        except OSError as exc:\n            raise JLMixingError(f"Could not create staging file in {parent}: {exc}") from exc\n        return fd, candidate\n\n    raise JLMixingError(f"Could not allocate a unique staging file in {parent}")\n\n\ndef reserve_staging_path(parent: Path, prefix: str) -> Path:\n    """Return a unique absent sibling path without creating restrictive metadata."""\n\n    if parent.is_symlink() or not parent.is_dir():\n        raise JLMixingError(f"Staging parent is missing or unsafe: {parent}")\n    for _ in range(32):\n        candidate = parent / f"{prefix}{uuid.uuid4().hex[:12]}"\n        if not candidate.exists() and not candidate.is_symlink():\n            return candidate\n    raise JLMixingError(f"Could not allocate a unique staging path in {parent}")\n\n\n'''
+          if 'def create_staging_file(' not in text:
+              if anchor not in text:
+                  raise SystemExit('transactions helper insertion marker missing')
+              text = text.replace(anchor, helpers + anchor, 1)
+          old = '''    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)\n    temp_path = Path(temp_name)\n'''
+          new = '''    fd, temp_path = create_staging_file(path.parent, f".{path.name}.")\n'''
+          if old not in text:
+              raise SystemExit('transactions mkstemp marker missing')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          # Studio creation.
+          p = Path('src/jl_mixing/studio.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          text = text.replace('from .transactions import commit_new_directory\n', 'from .transactions import commit_new_directory, create_staging_directory\n')
+          text = text.replace('    stage = Path(tempfile.mkdtemp(prefix=f".{root.name}.jl-stage-", dir=parent))\n', '    stage = create_staging_directory(parent, f".{root.name}.jl-stage-")\n')
+          p.write_text(text)
+
+          # Delivery transactions.
+          p = Path('src/jl_mixing/delivery.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          text = text.replace('from .transactions import _fail_requested, _injected_failure\n', 'from .transactions import (\n    _fail_requested,\n    _injected_failure,\n    create_staging_directory,\n    create_staging_file,\n    reserve_staging_path,\n)\n')
+          text = text.replace('    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.jl-restore-", dir=path.parent)\n    temp = Path(temp_name)\n', '    fd, temp = create_staging_file(path.parent, f".{path.name}.jl-restore-")\n')
+          text = text.replace('    backup = Path(tempfile.mkdtemp(prefix=f".{delivery_root.name}.jl-backup-", dir=parent))\n    backup.rmdir()\n', '    backup = reserve_staging_path(parent, f".{delivery_root.name}.jl-backup-")\n')
+          text = text.replace('    stage = Path(tempfile.mkdtemp(prefix=f".{delivery_root.name}.jl-stage-", dir=delivery_root.parent))\n    manifest_fd, manifest_temp_name = tempfile.mkstemp(prefix=f".{manifest_path.name}.", dir=manifest_path.parent)\n    os.close(manifest_fd)\n    manifest_temp = Path(manifest_temp_name)\n', '    stage = create_staging_directory(delivery_root.parent, f".{delivery_root.name}.jl-stage-")\n    manifest_fd, manifest_temp = create_staging_file(manifest_path.parent, f".{manifest_path.name}.")\n    os.close(manifest_fd)\n')
+          p.write_text(text)
+
+          # Revision transactions.
+          p = Path('src/jl_mixing/revision.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          text = text.replace('from .transactions import _fail_requested, _injected_failure\n', 'from .transactions import _fail_requested, _injected_failure, create_staging_directory, create_staging_file\n')
+          text = text.replace('    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.jl-restore-", dir=path.parent)\n    restore = Path(temp_name)\n', '    fd, restore = create_staging_file(path.parent, f".{path.name}.jl-restore-")\n')
+          text = text.replace('    stage = Path(tempfile.mkdtemp(prefix=f".{revision_name}.jl-stage-", dir=revisions_root))\n    manifest_fd, manifest_temp_name = tempfile.mkstemp(prefix=f".{manifest_path.name}.", dir=manifest_path.parent)\n    manifest_temp = Path(manifest_temp_name)\n', '    stage = create_staging_directory(revisions_root, f".{revision_name}.jl-stage-")\n    manifest_fd, manifest_temp = create_staging_file(manifest_path.parent, f".{manifest_path.name}.")\n')
+          p.write_text(text)
+
+          # Revision-description atomic manifest write.
+          p = Path('src/jl_mixing/revision_description.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          marker = 'from .revision import _load_manifest, _validate_project_state, _validate_schema\n'
+          text = text.replace(marker, marker + 'from .transactions import create_staging_file\n')
+          text = text.replace('    fd, temp_name = tempfile.mkstemp(\n        prefix=f".{manifest_path.name}.", dir=manifest_path.parent\n    )\n    temp_path = Path(temp_name)\n', '    fd, temp_path = create_staging_file(manifest_path.parent, f".{manifest_path.name}.")\n')
+          p.write_text(text)
+
+          # Shell config atomic write.
+          p = Path('src/jl_mixing/shell_config.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          text = text.replace('from pathlib import Path\n', 'from pathlib import Path\n\nfrom .transactions import create_staging_file\n')
+          text = text.replace('    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.jl-mixing.", dir=path.parent)\n    temporary = Path(temporary_name)\n', '    fd, temporary = create_staging_file(path.parent, f".{path.name}.jl-mixing.")\n')
+          p.write_text(text)
+
+          # macOS Python installer staging.
+          p = Path('src/jl_mixing/macos_installer.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          text = text.replace('from .shell_config import MarkerError, atomic_write, install_block, locate_block, remove_block\n', 'from .shell_config import MarkerError, atomic_write, install_block, locate_block, remove_block\nfrom .transactions import create_staging_directory\n')
+          text = text.replace('    stage_root = Path(tempfile.mkdtemp(prefix=".jl-mixing-install-stage-", dir=prefix))\n    backup_root = Path(tempfile.mkdtemp(prefix=".jl-mixing-install-backup-", dir=prefix))\n', '    stage_root = create_staging_directory(prefix, ".jl-mixing-install-stage-")\n    backup_root = create_staging_directory(prefix, ".jl-mixing-install-backup-")\n')
+          p.write_text(text)
+
+          # Standalone shell config tool: use normal exclusive sibling create.
+          p = Path('tools/manage-shell-config.py'); text = p.read_text()
+          text = text.replace('import tempfile\n', '')
+          if 'def _create_staging_file(' not in text:
+              insert = '''\ndef _create_staging_file(path: Path) -> tuple[int, Path]:\n    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL\n    if hasattr(os, "O_BINARY"):\n        flags |= os.O_BINARY\n    for _ in range(32):\n        candidate = path.parent / f".{path.name}.jl-mixing.{os.urandom(6).hex()}"\n        try:\n            return os.open(candidate, flags, 0o666), candidate\n        except FileExistsError:\n            continue\n    raise RuntimeError(f"could not allocate staging file beside {path}")\n\n'''
+              marker = 'BEGIN = b"# >>> JL Mixing managed configuration >>>"\n'
+              text = text.replace(marker, insert + marker, 1)
+          text = text.replace('    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.jl-mixing.", dir=path.parent)\n    temporary = Path(temporary_name)\n', '    fd, temporary = _create_staging_file(path)\n')
+          p.write_text(text)
+
+          # Shell platform primitives: sibling temp files/dirs inherit parent ACL.
+          p = Path('lib/platform.sh'); text = p.read_text()
+          old = '''# Create a temporary file beside a target so final rename remains atomic.\njl_mktemp_file_near() {\n    local target directory base\n    target="$1"\n    directory="$(dirname "$target")"\n    base="$(basename "$target")"\n    mkdir -p "$directory"\n    mktemp "$directory/.${base}.tmp.XXXXXX"\n}\n'''
+          new = '''# Create a temporary file beside a target so final rename remains atomic.\n# Use ordinary exclusive creation so SMB/NAS ACLs inherit from the parent.\njl_mktemp_file_near() {\n    local target directory base candidate attempt\n    target="$1"\n    directory="$(dirname "$target")"\n    base="$(basename "$target")"\n    mkdir -p "$directory"\n    attempt=0\n    while [ "$attempt" -lt 32 ]; do\n        candidate="$directory/.${base}.tmp.$$.$RANDOM.$attempt"\n        if (set -C; : > "$candidate") 2>/dev/null; then\n            printf '%s\\n' "$candidate"\n            return 0\n        fi\n        attempt=$((attempt + 1))\n    done\n    jl_error "Unable to allocate temporary file beside: $target"\n    return "$JL_EXIT_GENERAL"\n}\n\n# Create a unique temporary directory beside a target using normal ACL inheritance.\njl_mktemp_dir_near() {\n    local target directory base candidate attempt\n    target="$1"\n    directory="$(dirname "$target")"\n    base="$(basename "$target")"\n    attempt=0\n    while [ "$attempt" -lt 32 ]; do\n        candidate="$directory/.${base}.tmp.$$.$RANDOM.$attempt"\n        if mkdir "$candidate" 2>/dev/null; then\n            printf '%s\\n' "$candidate"\n            return 0\n        fi\n        attempt=$((attempt + 1))\n    done\n    jl_error "Unable to allocate temporary directory beside: $target"\n    return "$JL_EXIT_GENERAL"\n}\n'''
+          if old not in text:
+              raise SystemExit('platform temp-file helper marker missing')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          p = Path('lib/transaction.sh'); text = p.read_text()
+          text = text.replace('    mktemp -d "$parent/.${base}.stage.XXXXXX"\n', '    jl_mktemp_dir_near "$destination.stage"\n')
+          text = text.replace('    mktemp -d "$parent/.${base}.backup.XXXXXX"\n', '    jl_mktemp_dir_near "$destination.backup"\n')
+          p.write_text(text)
+
+          # Standalone install/uninstall sibling directory helpers.
+          helper = '''\ncreate_inherited_temp_dir() {\n    local parent prefix candidate attempt\n    parent="$1"\n    prefix="$2"\n    attempt=0\n    while [ "$attempt" -lt 32 ]; do\n        candidate="$parent/$prefix.$$.$RANDOM.$attempt"\n        if mkdir "$candidate" 2>/dev/null; then\n            printf '%s\\n' "$candidate"\n            return 0\n        fi\n        attempt=$((attempt + 1))\n    done\n    echo "Error: unable to allocate staging directory in $parent" >&2\n    return 1\n}\n\n'''
+          for path in ('install.sh', 'uninstall.sh'):
+              p = Path(path); text = p.read_text()
+              if 'create_inherited_temp_dir()' not in text:
+                  text = text.replace('set -eu\n\n', 'set -eu\n' + helper, 1)
+              text = text.replace('stage_root="$(mktemp -d "$prefix/.jl-mixing-install-stage.XXXXXX")"', 'stage_root="$(create_inherited_temp_dir "$prefix" ".jl-mixing-install-stage")"')
+              text = text.replace('backup_root="$(mktemp -d "$prefix/.jl-mixing-install-backup.XXXXXX")"', 'backup_root="$(create_inherited_temp_dir "$prefix" ".jl-mixing-install-backup")"')
+              text = text.replace('backup_root="$(mktemp -d "$prefix/.jl-mixing-uninstall-backup.XXXXXX")"', 'backup_root="$(create_inherited_temp_dir "$prefix" ".jl-mixing-uninstall-backup")"')
+              p.write_text(text)
+
+          # Permanent regression guard for persistent-path temp primitives.
+          test = Path('tests/python/test_temp_acl_primitives.py')
+          test.write_text('''from __future__ import annotations\n\nimport unittest\nfrom pathlib import Path\n\n\nclass TempAclPrimitiveTests(unittest.TestCase):\n    def test_python_persistent_transactions_do_not_use_tempfile_private_primitives(self):\n        root = Path(__file__).resolve().parents[2]\n        for relative in (\n            "src/jl_mixing/delivery.py",\n            "src/jl_mixing/revision.py",\n            "src/jl_mixing/revision_description.py",\n            "src/jl_mixing/studio.py",\n            "src/jl_mixing/shell_config.py",\n            "src/jl_mixing/macos_installer.py",\n            "src/jl_mixing/managed_client_files.py",\n        ):\n            text = (root / relative).read_text(encoding="utf-8")\n            self.assertNotIn("tempfile.mkdtemp", text, relative)\n            self.assertNotIn("tempfile.mkstemp", text, relative)\n\n    def test_shell_persistent_transactions_do_not_use_mktemp_beside_destination(self):\n        root = Path(__file__).resolve().parents[2]\n        for relative in ("lib/transaction.sh", "install.sh", "uninstall.sh"):\n            text = (root / relative).read_text(encoding="utf-8")\n            self.assertNotIn('mktemp -d "$parent/', text, relative)\n            self.assertNotIn('mktemp -d "$prefix/', text, relative)\n\n\nif __name__ == "__main__":\n    unittest.main()\n''')
+          PY
+      - name: Verify audit scope before commit
+        run: |
+          echo 'Remaining persistent-path Python tempfile calls:'
+          grep -RInE 'tempfile\.(mkdtemp|mkstemp)' src/jl_mixing || true
+          echo 'Remaining sibling shell mktemp calls:'
+          grep -RInE 'mktemp -d "\$(parent|prefix)|mktemp "\$directory/' lib install.sh uninstall.sh || true
+      - name: Remove temporary audit workflows and commit
+        run: |
+          rm -f .github/workflows/temp-primitive-audit.yml .github/workflows/apply-temp-acl-audit-fixes.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Remove private temp primitives from persistent transactions"
+          git push origin HEAD:fix/managed-import-nas-acl
