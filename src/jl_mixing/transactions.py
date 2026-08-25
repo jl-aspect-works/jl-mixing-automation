@@ -23,11 +23,12 @@ def _injected_failure(point: str) -> JLMixingError:
 def create_staging_directory(parent: Path, prefix: str) -> Path:
     """Create a unique sibling staging directory using normal ACL inheritance.
 
-    ``tempfile.mkdtemp`` intentionally creates directories with private 0700
-    permissions. On SMB/NAS shares that can translate into a server ACL that
-    prevents the Windows client from creating children or deleting the stage.
-    A normal mkdir keeps the parent's ordinary inheritance behavior while the
-    randomized hidden name still provides collision-safe transaction staging.
+    Python's private temporary-directory helper intentionally creates directories
+    with restrictive permissions. On SMB/NAS shares that can translate into a
+    server ACL that prevents the Windows client from creating children or
+    deleting the stage. A normal mkdir keeps the parent's ordinary inheritance
+    behavior while the randomized hidden name still provides collision-safe
+    transaction staging.
     """
 
     if parent.is_symlink() or not parent.is_dir():
