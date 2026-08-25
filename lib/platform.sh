@@ -145,13 +145,43 @@ jl_sha256() {
 }
 
 # Create a temporary file beside a target so final rename remains atomic.
+# Use ordinary exclusive creation so SMB/NAS ACLs inherit from the parent.
 jl_mktemp_file_near() {
-    local target directory base
+    local target directory base candidate attempt
     target="$1"
     directory="$(dirname "$target")"
     base="$(basename "$target")"
     mkdir -p "$directory"
-    mktemp "$directory/.${base}.tmp.XXXXXX"
+    attempt=0
+    while [ "$attempt" -lt 32 ]; do
+        candidate="$directory/.${base}.tmp.$$.$RANDOM.$attempt"
+        if (set -C; : > "$candidate") 2>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+    done
+    jl_error "Unable to allocate temporary file beside: $target"
+    return "$JL_EXIT_GENERAL"
+}
+
+# Create a unique temporary directory beside a target using normal ACL inheritance.
+jl_mktemp_dir_near() {
+    local target directory base candidate attempt
+    target="$1"
+    directory="$(dirname "$target")"
+    base="$(basename "$target")"
+    attempt=0
+    while [ "$attempt" -lt 32 ]; do
+        candidate="$directory/.${base}.tmp.$$.$RANDOM.$attempt"
+        if mkdir "$candidate" 2>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+    done
+    jl_error "Unable to allocate temporary directory beside: $target"
+    return "$JL_EXIT_GENERAL"
 }
 
 # Create a portable temporary directory for isolated work.

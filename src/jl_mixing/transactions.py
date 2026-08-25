@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import tempfile
 import uuid
 from pathlib import Path
 
@@ -45,6 +44,40 @@ def create_staging_directory(parent: Path, prefix: str) -> Path:
         return candidate
 
     raise JLMixingError(f"Could not allocate a unique staging directory in {parent}")
+
+
+def create_staging_file(parent: Path, prefix: str) -> tuple[int, Path]:
+    """Create an exclusive sibling file using normal ACL inheritance."""
+
+    if parent.is_symlink() or not parent.is_dir():
+        raise JLMixingError(f"Staging parent is missing or unsafe: {parent}")
+
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    for _ in range(32):
+        candidate = parent / f"{prefix}{uuid.uuid4().hex[:12]}"
+        try:
+            fd = os.open(candidate, flags, 0o666)
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise JLMixingError(f"Could not create staging file in {parent}: {exc}") from exc
+        return fd, candidate
+
+    raise JLMixingError(f"Could not allocate a unique staging file in {parent}")
+
+
+def reserve_staging_path(parent: Path, prefix: str) -> Path:
+    """Return a unique absent sibling path without creating restrictive metadata."""
+
+    if parent.is_symlink() or not parent.is_dir():
+        raise JLMixingError(f"Staging parent is missing or unsafe: {parent}")
+    for _ in range(32):
+        candidate = parent / f"{prefix}{uuid.uuid4().hex[:12]}"
+        if not candidate.exists() and not candidate.is_symlink():
+            return candidate
+    raise JLMixingError(f"Could not allocate a unique staging path in {parent}")
 
 
 def commit_new_directory(staged_directory: Path, destination: Path) -> None:
@@ -88,8 +121,7 @@ def commit_new_directory(staged_directory: Path, destination: Path) -> None:
 
 
 def _write_sibling(path: Path, data: bytes, mode: int | None) -> Path:
-    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temp_path = Path(temp_name)
+    fd, temp_path = create_staging_file(path.parent, f".{path.name}.")
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)

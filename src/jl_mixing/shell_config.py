@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
+
+from .transactions import create_staging_file
 
 BEGIN = b"# >>> JL Mixing managed configuration >>>"
 END = b"# <<< JL Mixing managed configuration <<<"
@@ -80,8 +81,7 @@ def remove_block(data: bytes, *, require_present: bool = False) -> bytes:
 def atomic_write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.jl-mixing.", dir=path.parent)
-    temporary = Path(temporary_name)
+    fd, temporary = create_staging_file(path.parent, f".{path.name}.jl-mixing.")
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)

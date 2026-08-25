@@ -54,7 +54,7 @@ jl_txn_stage_directory_near() {
         return "$JL_EXIT_UNSAFE"
     }
 
-    mktemp -d "$parent/.${base}.stage.XXXXXX"
+    jl_mktemp_dir_near "$destination.stage"
 }
 
 # Create a unique hidden backup container beside a destination. The original
@@ -66,7 +66,7 @@ jl_txn_backup_container_near() {
     destination="$1"
     parent="$(dirname "$destination")"
     base="$(basename "$destination")"
-    mktemp -d "$parent/.${base}.backup.XXXXXX"
+    jl_mktemp_dir_near "$destination.backup"
 }
 
 # Move an existing entry into a unique sibling backup container. If the source

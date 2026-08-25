@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import tempfile
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass
@@ -19,7 +18,7 @@ from .errors import ContextError, UnsafeOperationError, ValidationError
 from .metadata import now_iso8601, validate_v11
 from .paths import assert_no_case_insensitive_child_collision, assert_no_symlink_components
 from .revision_source import RevisionSourcePlan, build_plan, copy_from_plan
-from .transactions import _fail_requested, _injected_failure
+from .transactions import _fail_requested, _injected_failure, create_staging_directory, create_staging_file
 from .versions import application_root
 
 
@@ -138,8 +137,7 @@ def _render_notes(number: int, description: str) -> str:
 
 
 def _restore_manifest(path: Path, data: bytes, mode: int) -> None:
-    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.jl-restore-", dir=path.parent)
-    restore = Path(temp_name)
+    fd, restore = create_staging_file(path.parent, f".{path.name}.jl-restore-")
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
@@ -214,9 +212,8 @@ def create_revision(request: RevisionCreateRequest) -> RevisionCreateResult:
 
     prior_manifest = manifest_path.read_bytes()
     prior_manifest_mode = manifest_path.stat().st_mode & 0o777
-    stage = Path(tempfile.mkdtemp(prefix=f".{revision_name}.jl-stage-", dir=revisions_root))
-    manifest_fd, manifest_temp_name = tempfile.mkstemp(prefix=f".{manifest_path.name}.", dir=manifest_path.parent)
-    manifest_temp = Path(manifest_temp_name)
+    stage = create_staging_directory(revisions_root, f".{revision_name}.jl-stage-")
+    manifest_fd, manifest_temp = create_staging_file(manifest_path.parent, f".{manifest_path.name}.")
     committed_directory = False
     manifest_replaced = False
     try:

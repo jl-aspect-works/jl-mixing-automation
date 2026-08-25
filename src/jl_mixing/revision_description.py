@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +14,7 @@ from .errors import ValidationError
 from .metadata import now_iso8601
 from .paths import assert_no_symlink_components
 from .revision import _load_manifest, _validate_project_state, _validate_schema
+from .transactions import create_staging_file
 
 
 @dataclass(frozen=True)
@@ -91,10 +91,7 @@ def update_revision_description(
             updated=False,
         )
 
-    fd, temp_name = tempfile.mkstemp(
-        prefix=f".{manifest_path.name}.", dir=manifest_path.parent
-    )
-    temp_path = Path(temp_name)
+    fd, temp_path = create_staging_file(manifest_path.parent, f".{manifest_path.name}.")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(updated, handle, indent=2, ensure_ascii=False)

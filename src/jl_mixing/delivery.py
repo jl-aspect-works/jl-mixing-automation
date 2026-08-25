@@ -8,7 +8,6 @@ import json
 import os
 import re
 import shutil
-import tempfile
 import uuid
 import zipfile
 from copy import deepcopy
@@ -22,7 +21,13 @@ from .context import resolve_project, revision_root_for_number, studio_root as r
 from .errors import ContextError, UnsafeOperationError, ValidationError
 from .metadata import create_v11, now_iso8601
 from .revision import _load_manifest, _validate_project_state, _validate_schema
-from .transactions import _fail_requested, _injected_failure
+from .transactions import (
+    _fail_requested,
+    _injected_failure,
+    create_staging_directory,
+    create_staging_file,
+    reserve_staging_path,
+)
 from .versions import application_root
 
 DeliveryMode = Literal["default", "overwrite", "clean"]
@@ -437,8 +442,7 @@ def _stage_delivery(
 
 
 def _restore_file_bytes(path: Path, data: bytes, mode: int) -> None:
-    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.jl-restore-", dir=path.parent)
-    temp = Path(temp_name)
+    fd, temp = create_staging_file(path.parent, f".{path.name}.jl-restore-")
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
@@ -458,8 +462,7 @@ def _commit_delivery_and_manifest(stage: Path, delivery_root: Path, manifest_tem
     prior_manifest_mode = manifest_path.stat().st_mode & 0o777
 
     parent = delivery_root.parent
-    backup = Path(tempfile.mkdtemp(prefix=f".{delivery_root.name}.jl-backup-", dir=parent))
-    backup.rmdir()
+    backup = reserve_staging_path(parent, f".{delivery_root.name}.jl-backup-")
     moved_old = False
     installed_new = False
     manifest_replaced = False
@@ -555,10 +558,9 @@ def create_delivery(request: DeliveryCreateRequest) -> DeliveryCreateResult:
 
     studio_root = resolve_studio_root(project_root)
     document_id = _document_id(studio_root)
-    stage = Path(tempfile.mkdtemp(prefix=f".{delivery_root.name}.jl-stage-", dir=delivery_root.parent))
-    manifest_fd, manifest_temp_name = tempfile.mkstemp(prefix=f".{manifest_path.name}.", dir=manifest_path.parent)
+    stage = create_staging_directory(delivery_root.parent, f".{delivery_root.name}.jl-stage-")
+    manifest_fd, manifest_temp = create_staging_file(manifest_path.parent, f".{manifest_path.name}.")
     os.close(manifest_fd)
-    manifest_temp = Path(manifest_temp_name)
     try:
         delivery_manifest = _stage_delivery(
             plan,

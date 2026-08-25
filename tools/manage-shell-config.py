@@ -12,7 +12,19 @@ import argparse
 from pathlib import Path
 import os
 import sys
-import tempfile
+
+
+def _create_staging_file(path: Path) -> tuple[int, Path]:
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    for _ in range(32):
+        candidate = path.parent / f".{path.name}.jl-mixing.{os.urandom(6).hex()}"
+        try:
+            return os.open(candidate, flags, 0o666), candidate
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"could not allocate staging file beside {path}")
 
 BEGIN = b"# >>> JL Mixing managed configuration >>>"
 END = b"# <<< JL Mixing managed configuration <<<"
@@ -92,8 +104,7 @@ def remove_block(data: bytes, *, require_present: bool) -> bytes:
 def atomic_write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.jl-mixing.", dir=path.parent)
-    temporary = Path(temporary_name)
+    fd, temporary = _create_staging_file(path)
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)

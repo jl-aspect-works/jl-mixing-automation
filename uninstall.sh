@@ -3,6 +3,23 @@
 # installer-managed shell block without touching studio workspaces.
 set -eu
 
+create_inherited_temp_dir() {
+    local parent prefix candidate attempt
+    parent="$1"
+    prefix="$2"
+    attempt=0
+    while [ "$attempt" -lt 32 ]; do
+        candidate="$parent/$prefix.$$.$RANDOM.$attempt"
+        if mkdir "$candidate" 2>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+    done
+    echo "Error: unable to allocate staging directory in $parent" >&2
+    return 1
+}
+
 usage() {
     cat <<'USAGE'
 Usage: jl-mixing-uninstall [--prefix PATH]
@@ -162,7 +179,7 @@ done <<EOF_PUBLIC
 $public_commands
 EOF_PUBLIC
 
-backup_root="$(mktemp -d "$prefix/.jl-mixing-uninstall-backup.XXXXXX")"
+backup_root="$(create_inherited_temp_dir "$prefix" ".jl-mixing-uninstall-backup")"
 mkdir -p "$backup_root/bin"
 staged_startup=""
 shell_file_existed=0
