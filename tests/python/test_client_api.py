@@ -89,7 +89,7 @@ class ClientApiTests(unittest.TestCase):
             self.assertEqual(proc.stderr, "")
             payload = json.loads(proc.stdout)
             self.assertEqual(payload["status"], "planned")
-            self.assertEqual(Path(payload["data"]["workspace_path"]), studio)
+            self.assertTrue(Path(payload["data"]["workspace_path"]).samefile(studio))
             self.assertEqual(payload["data"]["client"]["id"], "explicit-client")
 
     def test_system_info_advertises_explicit_client_context(self) -> None:
