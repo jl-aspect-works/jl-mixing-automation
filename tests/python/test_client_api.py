@@ -97,7 +97,7 @@ class ClientApiTests(unittest.TestCase):
             proc = run_cli(Path(tmp), "system-info", "--json")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             payload = json.loads(proc.stdout)
-            self.assertIn("client.create.explicit-context", payload["capabilities"])
+            self.assertIn("client.create.context", payload["capabilities"])
 
     def test_success_commits_authoritative_client_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
