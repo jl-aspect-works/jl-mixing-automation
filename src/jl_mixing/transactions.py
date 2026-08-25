@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 
 from .errors import JLMixingError
@@ -18,6 +19,32 @@ def _fail_requested(point: str) -> bool:
 
 def _injected_failure(point: str) -> JLMixingError:
     return JLMixingError(f"Injected transaction failure at: {point}")
+
+
+def create_staging_directory(parent: Path, prefix: str) -> Path:
+    """Create a unique sibling staging directory using normal ACL inheritance.
+
+    ``tempfile.mkdtemp`` intentionally creates directories with private 0700
+    permissions. On SMB/NAS shares that can translate into a server ACL that
+    prevents the Windows client from creating children or deleting the stage.
+    A normal mkdir keeps the parent's ordinary inheritance behavior while the
+    randomized hidden name still provides collision-safe transaction staging.
+    """
+
+    if parent.is_symlink() or not parent.is_dir():
+        raise JLMixingError(f"Staging parent is missing or unsafe: {parent}")
+
+    for _ in range(32):
+        candidate = parent / f"{prefix}{uuid.uuid4().hex[:12]}"
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise JLMixingError(f"Could not create staging directory in {parent}: {exc}") from exc
+        return candidate
+
+    raise JLMixingError(f"Could not allocate a unique staging directory in {parent}")
 
 
 def commit_new_directory(staged_directory: Path, destination: Path) -> None:
