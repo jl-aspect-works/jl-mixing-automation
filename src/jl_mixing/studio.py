@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,7 @@ from .errors import ContextError, UnsafeOperationError, ValidationError
 from .metadata import create_v11, validate_v11
 from .naming import slugify
 from .paths import assert_no_symlink_components
-from .transactions import commit_new_directory
+from .transactions import commit_new_directory, create_staging_directory
 from .validation import require_bit_depth, require_file_format, require_sample_rate, require_slug
 from .versions import application_root
 
@@ -108,7 +107,7 @@ def create_studio(request: StudioCreateRequest) -> StudioCreateResult:
     if request.dry_run:
         return StudioCreateResult(root, config, document, False)
 
-    stage = Path(tempfile.mkdtemp(prefix=f".{root.name}.jl-stage-", dir=parent))
+    stage = create_staging_directory(parent, f".{root.name}.jl-stage-")
     try:
         (stage / "Clients").mkdir()
         (stage / "Studio").mkdir()

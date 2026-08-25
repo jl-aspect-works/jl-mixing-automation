@@ -7,6 +7,23 @@
 # application, launchers, and shell configuration together.
 set -eu
 
+create_inherited_temp_dir() {
+    local parent prefix candidate attempt
+    parent="$1"
+    prefix="$2"
+    attempt=0
+    while [ "$attempt" -lt 32 ]; do
+        candidate="$parent/$prefix.$$.$RANDOM.$attempt"
+        if mkdir "$candidate" 2>/dev/null; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+    done
+    echo "Error: unable to allocate staging directory in $parent" >&2
+    return 1
+}
+
 usage() {
     cat <<'USAGE'
 Usage: ./install.sh [options]
@@ -252,7 +269,7 @@ if [ -e "$legacy_complete" ] && is_managed_launcher "$legacy_complete"; then
     legacy_complete_managed=1
 fi
 
-stage_root="$(mktemp -d "$prefix/.jl-mixing-install-stage.XXXXXX")"
+stage_root="$(create_inherited_temp_dir "$prefix" ".jl-mixing-install-stage")"
 backup_root=""
 commit_started=0
 shell_file_existed=0
@@ -476,7 +493,7 @@ if [ "$shell_integration_enabled" -eq 1 ]; then
     python3 "$SOURCE_ROOT/tools/manage-shell-config.py" validate "$staged_startup" | grep -q '^present$'
 fi
 
-backup_root="$(mktemp -d "$prefix/.jl-mixing-install-backup.XXXXXX")"
+backup_root="$(create_inherited_temp_dir "$prefix" ".jl-mixing-install-backup")"
 mkdir -p "$backup_root/bin"
 commit_started=1
 

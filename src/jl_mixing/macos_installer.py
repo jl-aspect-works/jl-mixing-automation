@@ -7,11 +7,11 @@ import json
 import os
 import shutil
 import sys
-import tempfile
 from pathlib import Path
 from shlex import quote
 
 from .shell_config import MarkerError, atomic_write, install_block, locate_block, remove_block
+from .transactions import create_staging_directory
 from .versions import application_root
 
 PUBLIC_COMMANDS = (
@@ -208,8 +208,8 @@ def install(prefix: Path, *, shell_integration_requested: bool) -> int:
 
     prefix.mkdir(parents=True, exist_ok=True)
     bin_dir.mkdir(parents=True, exist_ok=True)
-    stage_root = Path(tempfile.mkdtemp(prefix=".jl-mixing-install-stage-", dir=prefix))
-    backup_root = Path(tempfile.mkdtemp(prefix=".jl-mixing-install-backup-", dir=prefix))
+    stage_root = create_staging_directory(prefix, ".jl-mixing-install-stage-")
+    backup_root = create_staging_directory(prefix, ".jl-mixing-install-backup-")
     stage_app = stage_root / "share" / "jl-mixing"
     stage_bin = stage_root / "bin"
     commit_started = False

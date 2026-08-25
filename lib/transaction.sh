@@ -40,10 +40,9 @@ jl_txn_fail_if_requested() {
 
 # Create a hidden staging directory beside the eventual destination.
 jl_txn_stage_directory_near() {
-    local destination parent base
+    local destination parent
     destination="$1"
     parent="$(dirname "$destination")"
-    base="$(basename "$destination")"
 
     [ -d "$parent" ] || {
         jl_error "Transaction parent directory not found: $parent"
@@ -54,7 +53,7 @@ jl_txn_stage_directory_near() {
         return "$JL_EXIT_UNSAFE"
     }
 
-    mktemp -d "$parent/.${base}.stage.XXXXXX"
+    jl_mktemp_dir_near "$destination.stage"
 }
 
 # Create a unique hidden backup container beside a destination. The original
@@ -62,11 +61,9 @@ jl_txn_stage_directory_near() {
 # place avoids races and ambiguous ``mv`` behavior between files and
 # directories while a transaction is active.
 jl_txn_backup_container_near() {
-    local destination parent base
+    local destination
     destination="$1"
-    parent="$(dirname "$destination")"
-    base="$(basename "$destination")"
-    mktemp -d "$parent/.${base}.backup.XXXXXX"
+    jl_mktemp_dir_near "$destination.backup"
 }
 
 # Move an existing entry into a unique sibling backup container. If the source
@@ -188,8 +185,6 @@ jl_txn_commit_new_directory() {
         status=$?
     fi
 
-    # A post-rename failure is still part of this command's transaction. Remove
-    # only the directory just created by this invocation.
     jl_fs_remove_entry_no_follow "$destination" || {
         jl_error "New-directory commit failed and cleanup was incomplete: $destination"
         return "$JL_EXIT_GENERAL"
@@ -291,9 +286,6 @@ jl_txn_commit_directory_and_file() {
     if [ "$status" -eq 0 ]; then
         jl_txn_fail_if_requested after-coordinated-file || status=$?
     fi
-    # Optional verifier commands run while both backups are still available.
-    # This lets callers validate committed cross-file state and still receive a
-    # complete rollback when verification fails.
     if [ "$status" -eq 0 ] && [ "$#" -gt 0 ]; then
         "$@" || status=$?
     fi
