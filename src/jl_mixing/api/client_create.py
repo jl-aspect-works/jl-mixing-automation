@@ -15,6 +15,7 @@ from ..versions import api_version
 @dataclass(frozen=True)
 class ClientApiRequest:
     client_id: str
+    studio: str | None = None
     client_name: str | None = None
     artist: str = ""
     sample_rate: int | None = None
@@ -43,7 +44,8 @@ def _error_envelope(code: str, message: str, exit_code: int, *, status: str = "e
 
 def execute(request: ClientApiRequest) -> tuple[dict[str, Any], int]:
     try:
-        workspace = studio_root(Path.cwd())
+        context = Path(request.studio) if request.studio is not None else Path.cwd()
+        workspace = studio_root(context)
         result = create_client(ClientCreateRequest(
             studio_root=workspace,
             client_id=request.client_id,
@@ -99,6 +101,7 @@ def parse_args(args: list[str]) -> ClientApiRequest:
     if not args or args[0].startswith("-"):
         raise ArgumentError("client create requires CLIENT_ID and --json.")
     client_id = args[0]
+    studio: str | None = None
     client_name: str | None = None
     artist = ""
     sample_rate: int | None = None
@@ -115,12 +118,16 @@ def parse_args(args: list[str]) -> ClientApiRequest:
             json_seen += 1
         elif arg in {"--cd", "--no-cd"}:
             raise ArgumentError("client create JSON mode does not accept --cd or --no-cd.")
-        elif arg in {"--name", "--artist", "--sample-rate", "--bit-depth", "--file-format", "--delivery-method", "--deliverables"}:
+        elif arg in {"--studio", "--name", "--artist", "--sample-rate", "--bit-depth", "--file-format", "--delivery-method", "--deliverables"}:
             index += 1
             if index >= len(args):
                 raise ArgumentError(f"{arg} requires a value.")
             value = args[index]
-            if arg == "--name":
+            if arg == "--studio":
+                if not value.strip():
+                    raise ArgumentError("--studio requires a non-empty path.")
+                studio = value
+            elif arg == "--name":
                 client_name = value
             elif arg == "--artist":
                 artist = value
@@ -151,6 +158,7 @@ def parse_args(args: list[str]) -> ClientApiRequest:
         raise ArgumentError("client create requires exactly one --json option.")
     return ClientApiRequest(
         client_id=client_id,
+        studio=studio,
         client_name=client_name,
         artist=artist,
         sample_rate=sample_rate,
