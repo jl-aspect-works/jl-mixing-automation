@@ -1,0 +1,57 @@
+name: Managed import NAS fix
+
+on:
+  push:
+    branches:
+      - fix/managed-import-nas-acl
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/managed-import-nas-acl
+      - name: Apply managed import staging fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          service = Path('src/jl_mixing/managed_client_files.py')
+          text = service.read_text()
+          text = text.replace('import tempfile\n', '')
+          marker = 'from .errors import UnsafeOperationError, ValidationError\n'
+          addition = marker + 'from .transactions import create_staging_directory\n'
+          if addition not in text:
+              if marker not in text:
+                  raise SystemExit('managed_client_files import marker not found')
+              text = text.replace(marker, addition, 1)
+          old = '    transaction = Path(tempfile.mkdtemp(prefix=".jl-managed-import-", dir=project_root / "00_Admin"))\n'
+          new = '    transaction = create_staging_directory(project_root / "00_Admin", ".jl-managed-import-")\n'
+          if old not in text:
+              raise SystemExit('managed import transaction marker not found')
+          text = text.replace(old, new, 1)
+          service.write_text(text)
+
+          test = Path('tests/python/test_managed_client_files_nas.py')
+          text = test.read_text()
+          anchor = '\n\nif __name__ == "__main__":\n'
+          addition = '''\n    def test_import_stage_uses_normal_acl_inheritance(self):\n        """Managed import must not use tempfile private-directory permissions on NAS shares."""\n        with tempfile.TemporaryDirectory() as tmp:\n            root = Path(tmp)\n            project = root / "Project"\n            (project / "00_Admin").mkdir(parents=True)\n            (project / "01_Client_Files" / "Original_Delivery").mkdir(parents=True)\n            (project / "02_Audio_Preparation" / "Working_Audio").mkdir(parents=True)\n            source = root / "10_Piano.wav"\n            source.write_bytes(b"audio-content")\n            plan = plan_import(project, "files", (source,))\n\n            with patch.object(\n                tempfile,\n                "mkdtemp",\n                side_effect=AssertionError("managed imports must inherit the parent ACL"),\n            ):\n                result = execute_plan(project, plan, {})\n\n            self.assertEqual([item["result"] for item in result["items"]], ["created", "created"])\n            self.assertFalse(any((project / "00_Admin").glob(".jl-managed-import-*")))\n'''
+          if 'test_import_stage_uses_normal_acl_inheritance' not in text:
+              if anchor not in text:
+                  raise SystemExit('NAS test insertion marker not found')
+              text = text.replace(anchor, addition + anchor, 1)
+          test.write_text(text)
+          PY
+      - name: Remove temporary helper and commit
+        run: |
+          rm .github/workflows/managed-import-nas-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/jl_mixing/managed_client_files.py tests/python/test_managed_client_files_nas.py .github/workflows/managed-import-nas-fix.yml
+          git commit -m "Fix managed import staging ACL inheritance"
+          git push origin HEAD:fix/managed-import-nas-acl
