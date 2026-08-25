@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import tempfile
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ from .metadata import create_v11, now_iso8601, validate_v11
 from .naming import sanitize_folder_name, slugify
 from .paths import assert_no_case_insensitive_child_collision, assert_no_symlink_components
 from .source_import import SourcePlan, build_plan, copy_from_plan
-from .transactions import commit_new_directory
+from .transactions import commit_new_directory, create_staging_directory
 from .validation import require_bit_depth, require_deliverables, require_file_format, require_sample_rate, require_slug
 from .versions import application_root
 
@@ -280,7 +279,7 @@ def create_project(request: ProjectCreateRequest) -> ProjectCreateResult:
         return ProjectCreateResult(project_root, manifest, snapshot, initial_revision_root, values["client_root"], values["studio_root"], values["effective_cd"], values["source_plan"], False)
 
     projects_root = values["client_root"] / "Projects"
-    stage = Path(tempfile.mkdtemp(prefix=f".{project_root.name}.jl-stage-", dir=projects_root))
+    stage = create_staging_directory(projects_root, f".{project_root.name}.jl-stage-")
     try:
         for relative in (
             "00_Admin",
