@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ..context import resolve_project, studio_root
+from ..diagnostic_log import debug as log_debug
+from ..diagnostic_log import error as log_error
+from ..diagnostic_log import info as log_info
 from ..errors import ArgumentError, ContextError, JLMixingError, UnsafeOperationError, ValidationError
 from ..managed_client_file_provenance import execute_plan, plan_import, plan_reset
 from ..versions import api_version
@@ -41,6 +45,7 @@ def _envelope(operation: str, status: str, data: dict[str, Any], *, errors: list
 
 
 def _error(operation: str, code: str, message: str, exit_code: int, *, status: str = "error") -> dict[str, Any]:
+    log_error("operation_error", operation=operation, code=code, exit_code=exit_code, message=message)
     return _envelope(operation, status, {}, errors=[{"code": code, "message": message, "details": {"exit_code": exit_code}, "retryable": False}])
 
 
@@ -49,6 +54,7 @@ def _project_data(root: Path) -> dict[str, str]:
 
 
 def _emit_progress(operation: str, event: dict[str, Any]) -> None:
+    log_debug("progress_emit", operation=operation, **event)
     print(
         _PROGRESS_PREFIX + json.dumps({"operation": operation, **event}, separators=(",", ":"), sort_keys=True),
         file=sys.stderr,
@@ -136,9 +142,12 @@ def _selected_import_plan(plan: dict[str, Any], selected_relative_paths: tuple[s
 
 def execute_import_plan(request: ImportRequest) -> tuple[dict[str, Any], int]:
     operation = "client.files.import.plan"
+    started = time.monotonic()
+    log_info("operation_start", operation=operation, source_kind=request.source_kind, source_count=len(request.sources))
     try:
         root = resolve_project(request.project, Path.cwd())
         plan = plan_import(root, request.source_kind, request.sources)
+        log_info("operation_complete", operation=operation, duration_ms=int((time.monotonic() - started) * 1000), file_count=len(plan.get("files", [])))
         return _envelope(operation, "planned", {"project": _project_data(root), "plan": plan}), 0
     except ContextError as exc: return _error(operation, "PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
     except UnsafeOperationError as exc: return _error(operation, "UNSAFE_OPERATION", str(exc), exc.exit_code, status="blocked"), exc.exit_code
@@ -151,11 +160,21 @@ def execute_import_plan(request: ImportRequest) -> tuple[dict[str, Any], int]:
 
 def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
     operation = "client.files.import.execute"
+    started = time.monotonic()
+    log_info(
+        "operation_start",
+        operation=operation,
+        source_kind=request.source_kind,
+        source_count=len(request.sources),
+        selected_count=len(request.selected_relative_paths or ()),
+        progress_mode=request.progress,
+    )
     try:
         if not request.plan_id:
             raise ValidationError("Import execute requires --plan-id.")
         root = resolve_project(request.project, Path.cwd())
         progress_enabled = request.progress == _PROGRESS_MODE
+        log_info("progress_mode", operation=operation, streaming=progress_enabled)
         if progress_enabled:
             _emit_progress(
                 operation,
@@ -168,7 +187,14 @@ def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
                     "active": [],
                 },
             )
+        plan_started = time.monotonic()
         full_plan = plan_import(root, request.source_kind, request.sources)
+        log_info(
+            "import_replan_complete",
+            operation=operation,
+            duration_ms=int((time.monotonic() - plan_started) * 1000),
+            file_count=len(full_plan.get("files", [])),
+        )
         if full_plan["plan_id"] != request.plan_id:
             raise ValidationError("Import plan is stale; run import-plan again.")
         plan = _selected_import_plan(full_plan, request.selected_relative_paths)
@@ -176,6 +202,12 @@ def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
         result = execute_plan(root, plan, request.decisions or {}, progress=progress_adapter)
         if progress_adapter is not None:
             progress_adapter.finish()
+        log_info(
+            "operation_complete",
+            operation=operation,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            selected_count=len(plan.get("files", [])),
+        )
         return _envelope(operation, "success", {"project": _project_data(root), "plan_id": full_plan["plan_id"], "result": result}), 0
     except ContextError as exc: return _error(operation, "PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
     except UnsafeOperationError as exc: return _error(operation, "UNSAFE_OPERATION", str(exc), exc.exit_code, status="blocked"), exc.exit_code
