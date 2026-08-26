@@ -1,0 +1,35 @@
+name: Temp restore staging counter loop
+on:
+  push:
+    branches:
+      - feature/163-managed-import-staging-progress
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/163-managed-import-staging-progress
+      - name: Restore staging counter loop
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/jl_mixing/managed_client_files.py')
+          text = path.read_text()
+          old = '''        staged: dict[str, Path] = {}\n        for relative, source in source_objects.items():\n            emit_progress("staging", [relative])\n            staged[relative] = _stage_source(source, stage)\n        emit_progress("importing", [])\n'''
+          new = '''        staged: dict[str, Path] = {}\n        staged_files = 0\n        for relative, source in source_objects.items():\n            emit_progress("staging", [relative], completed=staged_files)\n            staged[relative] = _stage_source(source, stage)\n            staged_files += 1\n            emit_progress("staging", [relative], completed=staged_files)\n        emit_progress("importing", [])\n'''
+          if old not in text:
+              raise SystemExit('staging loop not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Remove helper and commit
+        run: |
+          rm .github/workflows/temp-163-restore-loop.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Advance managed import staging progress'
+          git push origin HEAD:feature/163-managed-import-staging-progress
