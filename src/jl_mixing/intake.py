@@ -5,14 +5,18 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .errors import ValidationError
 from .intake_cache import cache_identity, load_cache, reusable_cache_record, sha256_file, write_cache
 
 AUDIO_EXTENSIONS = {".wav", ".wave", ".aif", ".aiff", ".flac", ".mp3", ".m4a"}
+_VALIDATION_WORKERS = 2
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 @dataclass(frozen=True)
@@ -166,6 +170,18 @@ def _status_for(record: dict[str, Any]) -> str:
     return "valid"
 
 
+def _without_duplicate_findings(record: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(record)
+    findings = cleaned.get("findings")
+    if isinstance(findings, list):
+        cleaned["findings"] = [
+            finding
+            for finding in findings
+            if not isinstance(finding, dict) or finding.get("code") != "EXACT_DUPLICATE"
+        ]
+    return cleaned
+
+
 def validate_intake(
     source: Path,
     *,
@@ -177,11 +193,14 @@ def validate_intake(
     ffmpeg_path: str | None = None,
     cache_path: Path | None = None,
     update_cache: bool = True,
+    progress: ProgressCallback | None = None,
 ) -> IntakeResult:
     source = source.resolve()
     if not source.is_dir() or source.is_symlink():
         raise ValidationError(f"Source directory not found or unsafe: {source}")
 
+    if progress is not None:
+        progress({"phase": "scanning", "completed": 0, "total": None, "active": []})
     files = sorted(
         (p for p in source.rglob("*") if p.is_file() and not p.is_symlink()),
         key=lambda p: str(p.relative_to(source)).lower(),
@@ -201,32 +220,57 @@ def validate_intake(
     unsupported_findings: list[str] = []
     unavailable_findings: list[str] = []
     inventory: list[tuple[Path, dict[str, Any] | None, str]] = []
-    file_results: list[dict[str, Any]] = []
+    results_by_path: dict[str, dict[str, Any]] = {}
     cache_reused = 0
     files_validated = 0
+    total_files = len(files)
+    completed_files = 0
+    active_files: set[str] = set()
+    progress_lock = threading.Lock()
+
+    def emit_progress(phase: str = "validating") -> None:
+        if progress is None:
+            return
+        progress({
+            "phase": phase,
+            "completed": completed_files,
+            "total": total_files,
+            "active": sorted(active_files, key=str.lower),
+        })
 
     if not files:
         critical_errors.append("No files were found in the intake source.")
+    emit_progress()
 
+    uncached: list[tuple[Path, str, bool]] = []
     for path in files:
         relative = str(path.relative_to(source)).replace("\\", "/")
         is_audio = path.suffix.lower() in AUDIO_EXTENSIONS
         reusable = reusable_cache_record(path, relative, prior_cache)
         if reusable is not None and reusable.get("is_audio") == is_audio:
-            record = dict(reusable)
+            record = _without_duplicate_findings(reusable)
             record["cache_state"] = "reused"
+            results_by_path[relative] = record
             cache_reused += 1
+            completed_files += 1
+            emit_progress()
         else:
-            files_validated += 1
+            uncached.append((path, relative, is_audio))
+
+    def validate_file(item: tuple[Path, str, bool]) -> tuple[str, dict[str, Any]]:
+        path, relative, is_audio = item
+        nonlocal completed_files
+        with progress_lock:
+            active_files.add(relative)
+            emit_progress()
+        try:
             metadata: dict[str, Any] | None = None
             inspection = "not-inspected"
             findings: list[dict[str, Any]] = []
             decode_ok: bool | None = None
             dual_mono: bool | None = None
-            digest: str | None = None
 
             if is_audio:
-                digest = sha256_file(path)
                 if ffprobe_available:
                     metadata, probe_error = ffprobe_metadata(path, str(detected_ffprobe))
                     if probe_error:
@@ -286,14 +330,12 @@ def validate_intake(
                         f"File format is {actual_format.upper()}; expected {expected_file_format.upper()}.",
                         expected=expected_file_format.upper(), actual=actual_format.upper(),
                     ))
-            else:
-                unsupported_findings.append(f"`{relative}`")
 
             record = {
                 **cache_identity(path),
                 "relative_path": relative,
                 "is_audio": is_audio,
-                "sha256": digest,
+                "sha256": None,
                 "metadata": metadata,
                 "inspection": inspection,
                 "decode_ok": decode_ok,
@@ -301,18 +343,53 @@ def validate_intake(
                 "findings": findings,
                 "cache_state": "validated",
             }
+            return relative, record
+        finally:
+            with progress_lock:
+                active_files.discard(relative)
+                completed_files += 1
+                emit_progress()
 
+    if uncached:
+        with ThreadPoolExecutor(max_workers=_VALIDATION_WORKERS, thread_name_prefix="intake") as executor:
+            for relative, record in executor.map(validate_file, uncached):
+                results_by_path[relative] = record
+        files_validated = len(uncached)
+
+    file_results: list[dict[str, Any]] = []
+    for path in files:
+        relative = str(path.relative_to(source)).replace("\\", "/")
+        record = results_by_path[relative]
         record["relative_path"] = relative
         record["status"] = _status_for(record)
-        next_cache[relative] = {key: value for key, value in record.items() if key not in {"cache_state", "status"}}
         file_results.append(record)
 
     if duplicate_check:
-        by_hash: dict[str, list[dict[str, Any]]] = {}
+        candidate_groups: dict[tuple[int, str], list[dict[str, Any]]] = {}
         for record in file_results:
-            digest = record.get("sha256")
-            if record.get("is_audio") and isinstance(digest, str) and digest:
-                by_hash.setdefault(digest, []).append(record)
+            if not record.get("is_audio"):
+                continue
+            size = record.get("size_bytes")
+            fingerprint = record.get("fingerprint")
+            if isinstance(size, int) and isinstance(fingerprint, str) and fingerprint:
+                candidate_groups.setdefault((size, fingerprint), []).append(record)
+        duplicate_candidates = [group for group in candidate_groups.values() if len(group) > 1]
+        hash_records = [record for group in duplicate_candidates for record in group if not record.get("sha256")]
+
+        def calculate_hash(record: dict[str, Any]) -> tuple[dict[str, Any], str]:
+            return record, sha256_file(source / Path(str(record["relative_path"])))
+
+        if hash_records:
+            with ThreadPoolExecutor(max_workers=_VALIDATION_WORKERS, thread_name_prefix="intake-hash") as executor:
+                for record, digest in executor.map(calculate_hash, hash_records):
+                    record["sha256"] = digest
+
+        by_hash: dict[str, list[dict[str, Any]]] = {}
+        for group in duplicate_candidates:
+            for record in group:
+                digest = record.get("sha256")
+                if isinstance(digest, str) and digest:
+                    by_hash.setdefault(digest, []).append(record)
         for group in by_hash.values():
             if len(group) < 2:
                 continue
@@ -330,10 +407,15 @@ def validate_intake(
 
     for record in file_results:
         relative = str(record["relative_path"])
+        next_cache[relative] = {
+            key: value for key, value in record.items() if key not in {"cache_state", "status"}
+        }
         metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else None
         inspection = str(record.get("inspection") or "not-inspected")
         path = source / Path(relative)
         inventory.append((path, metadata, inspection))
+        if not record.get("is_audio"):
+            unsupported_findings.append(f"`{relative}`")
         for finding in record.get("findings", []):
             severity = finding.get("severity")
             code = finding.get("code")
@@ -377,7 +459,6 @@ def validate_intake(
     ):
         lines.extend(["", f"## {title}", ""])
         lines.extend(_items(items))
-
     lines.extend(["", "## Source Inventory", "", "| File | Size (bytes) | Technical details | Status |", "|---|---:|---|---|"])
     status_by_path = {str(record["relative_path"]): str(record["status"]) for record in file_results}
     for path, metadata, inspection in inventory:
@@ -413,6 +494,7 @@ def validate_intake(
         except OSError as exc:
             raise ValidationError(f"Unable to update intake validation cache: {cache_path}") from exc
 
+    emit_progress("complete")
     return IntakeResult(
         report_markdown="\n".join(lines).rstrip() + "\n",
         files_discovered=len(files),
