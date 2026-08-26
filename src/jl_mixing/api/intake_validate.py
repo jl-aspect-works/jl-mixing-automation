@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from ..versions import api_version
 _BEGIN = "<!-- BEGIN AUTOMATED SECTION -->"
 _END = "<!-- END AUTOMATED SECTION -->"
 _CACHE_NAME = "intake-validation-cache.json"
+_PROGRESS_PREFIX = "JL_PROGRESS "
+_PROGRESS_MODE = "stderr-json"
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,7 @@ class IntakeRequest:
     expected_bit_depth: int | None = None
     duplicate_check: bool = True
     dry_run: bool = False
+    progress: str | None = None
 
 
 def _manifest(project: Path) -> dict[str, Any]:
@@ -61,6 +65,15 @@ def _error_envelope(code: str, message: str, exit_code: int, *, status: str = "e
     }
 
 
+def _emit_progress(event: dict[str, Any]) -> None:
+    payload = {"operation": "intake.validate", **event}
+    print(
+        _PROGRESS_PREFIX + json.dumps(payload, separators=(",", ":"), sort_keys=True),
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
     try:
         project = resolve_project(request.project, Path.cwd())
@@ -78,6 +91,7 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
         source = (request.source or (project / "01_Client_Files" / "Original_Delivery")).resolve()
         report_path = project / "00_Admin" / "Intake_Report.md"
         cache_path = project / "00_Admin" / _CACHE_NAME
+        progress_callback = _emit_progress if request.progress == _PROGRESS_MODE else None
         result = validate_intake_incremental(
             source,
             expected_sample_rate=sample_rate,
@@ -86,7 +100,15 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
             duplicate_check=request.duplicate_check,
             cache_path=cache_path,
             update_cache=not request.dry_run,
+            progress=progress_callback,
         )
+        if progress_callback is not None:
+            progress_callback({
+                "phase": "finalizing",
+                "completed": result.files_discovered,
+                "total": result.files_discovered,
+                "active": [],
+            })
         audio_prep = build_audio_prep_status(
             project,
             original_files=result.files,
@@ -160,6 +182,7 @@ def parse_args(args: list[str]) -> IntakeRequest:
     bit_depth: int | None = None
     duplicate_check = True
     dry_run = False
+    progress: str | None = None
     json_seen = 0
     index = 0
     while index < len(args):
@@ -192,7 +215,14 @@ def parse_args(args: list[str]) -> IntakeRequest:
         elif arg == "--dry-run":
             dry_run = True
         elif arg.startswith("--progress="):
-            raise ArgumentError("intake validate does not yet support JSON progress events.")
+            value = arg.split("=", 1)[1]
+            if value != _PROGRESS_MODE:
+                raise ArgumentError(
+                    f"Unsupported intake progress mode: {value}. Expected {_PROGRESS_MODE}."
+                )
+            if progress is not None:
+                raise ArgumentError("intake validate accepts at most one --progress option.")
+            progress = value
         else:
             raise ArgumentError(f"Unknown option: {arg}")
         index += 1
@@ -207,4 +237,5 @@ def parse_args(args: list[str]) -> IntakeRequest:
         expected_bit_depth=bit_depth,
         duplicate_check=duplicate_check,
         dry_run=dry_run,
+        progress=progress,
     )
