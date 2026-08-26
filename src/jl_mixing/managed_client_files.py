@@ -357,9 +357,12 @@ def execute_plan(
     changed_audio = False
     try:
         staged: dict[str, Path] = {}
+        staged_files = 0
         for relative, source in source_objects.items():
-            emit_progress("staging", [relative])
+            emit_progress("staging", [relative], completed=staged_files)
             staged[relative] = _stage_source(source, stage)
+            staged_files += 1
+            emit_progress("staging", [relative], completed=staged_files)
         emit_progress("importing", [])
         item_by_id = {item["id"]: item for item in plan["items"]}
         for position, item in enumerate(plan["items"]):
