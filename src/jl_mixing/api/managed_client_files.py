@@ -56,6 +56,67 @@ def _emit_progress(operation: str, event: dict[str, Any]) -> None:
     )
 
 
+class _ImportProgressAdapter:
+    """Translate phase-local engine progress into an additive monotonic import contract."""
+
+    def __init__(self, operation: str, total_files: int):
+        self.operation = operation
+        self.total_files = total_files
+        self.overall_total = total_files * 2 + 1
+        self.staging_seen = 0
+        self.staging_complete_emitted = False
+        self.finalizing_emitted = False
+
+    def _emit(self, phase: str, completed: int, active: list[str], overall_completed: int) -> None:
+        _emit_progress(
+            self.operation,
+            {
+                "phase": phase,
+                "completed": completed,
+                "total": self.total_files,
+                "overall_completed": overall_completed,
+                "overall_total": self.overall_total,
+                "active": active,
+            },
+        )
+
+    def _finish_staging(self) -> None:
+        if not self.staging_complete_emitted:
+            self._emit("staging", self.total_files, [], self.total_files)
+            self.staging_complete_emitted = True
+
+    def __call__(self, event: dict[str, Any]) -> None:
+        phase = str(event.get("phase", ""))
+        active = [str(value) for value in event.get("active", [])]
+        completed = max(0, min(int(event.get("completed", 0)), self.total_files))
+
+        if phase == "staging":
+            stage_completed = min(self.staging_seen, self.total_files)
+            self._emit("staging", stage_completed, active, stage_completed)
+            self.staging_seen += 1
+            return
+
+        if phase == "importing":
+            self._finish_staging()
+            self._emit("importing", completed, active, self.total_files + completed)
+            return
+
+        if phase == "complete":
+            self._finish_staging()
+            self._emit("finalizing", self.total_files, [], self.total_files * 2)
+            self.finalizing_emitted = True
+            return
+
+        _emit_progress(self.operation, event)
+
+    def finish(self) -> None:
+        self._finish_staging()
+        if not self.finalizing_emitted:
+            self._emit("finalizing", self.total_files, [], self.total_files * 2)
+            self.finalizing_emitted = True
+        self._emit("complete", self.total_files, [], self.overall_total)
+
+
 def _selected_import_plan(plan: dict[str, Any], selected_relative_paths: tuple[str, ...] | None) -> dict[str, Any]:
     if selected_relative_paths is None:
         return plan
@@ -94,12 +155,27 @@ def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
         if not request.plan_id:
             raise ValidationError("Import execute requires --plan-id.")
         root = resolve_project(request.project, Path.cwd())
+        progress_enabled = request.progress == _PROGRESS_MODE
+        if progress_enabled:
+            _emit_progress(
+                operation,
+                {
+                    "phase": "planning",
+                    "completed": 0,
+                    "total": None,
+                    "overall_completed": 0,
+                    "overall_total": None,
+                    "active": [],
+                },
+            )
         full_plan = plan_import(root, request.source_kind, request.sources)
         if full_plan["plan_id"] != request.plan_id:
             raise ValidationError("Import plan is stale; run import-plan again.")
         plan = _selected_import_plan(full_plan, request.selected_relative_paths)
-        progress_callback = (lambda event: _emit_progress(operation, event)) if request.progress == _PROGRESS_MODE else None
-        result = execute_plan(root, plan, request.decisions or {}, progress=progress_callback)
+        progress_adapter = _ImportProgressAdapter(operation, len(plan["files"])) if progress_enabled else None
+        result = execute_plan(root, plan, request.decisions or {}, progress=progress_adapter)
+        if progress_adapter is not None:
+            progress_adapter.finish()
         return _envelope(operation, "success", {"project": _project_data(root), "plan_id": full_plan["plan_id"], "result": result}), 0
     except ContextError as exc: return _error(operation, "PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
     except UnsafeOperationError as exc: return _error(operation, "UNSAFE_OPERATION", str(exc), exc.exit_code, status="blocked"), exc.exit_code
