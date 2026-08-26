@@ -20,6 +20,7 @@ _CAPABILITIES = [
     "delivery.status",
     "intake.validate",
     "intake.validate.incremental",
+    "intake.validate.progress",
     "intake.validate.report",
     "intake.validate.structured",
     "project.create",
