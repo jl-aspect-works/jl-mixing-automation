@@ -1,12 +1,13 @@
-name: Temporary #160 implementation
+name: Temporary 160 implementation
 on:
   push:
-    branches: [feature/160-import-progress-validation-triggers]
+    branches:
+      - feature/160-import-progress-validation-triggers
 permissions:
   contents: write
 jobs:
   patch:
-    if: github.event.head_commit.message != 'Implement managed import progress for #160'
+    if: ${{ github.event.head_commit.message != 'Implement managed import progress for #160' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,8 +17,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply implementation
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           def replace(path, old, new):
@@ -63,15 +65,38 @@ jobs:
           path = 'tests/python/test_managed_client_files_api.py'
           p = Path(path); text = p.read_text()
           anchor = '    def test_discovery_advertises_managed_capabilities(self):\n'
-          test = '''    def test_import_execute_progress_is_opt_in_and_preserves_stdout_json(self):\n        with tempfile.TemporaryDirectory() as tmp:\n            root = Path(tmp); project = fixture(root / "studio")\n            source = root / "delivery"; source.mkdir()\n            (source / "one.wav").write_bytes(b"one")\n            (source / "two.wav").write_bytes(b"two")\n            planned = run(project, "client-files", "import-plan", "--json", "--source-kind", "folder", "--source", str(source))\n            plan = json.loads(planned.stdout)["data"]["plan"]\n            executed = run(project, "client-files", "import-execute", "--json", "--source-kind", "folder", "--source", str(source), "--plan-id", plan["plan_id"], "--progress=stderr-json")\n            self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)\n            payload = json.loads(executed.stdout)\n            self.assertEqual(payload["operation"], "client.files.import.execute")\n            lines = [line for line in executed.stderr.splitlines() if line.startswith("JL_PROGRESS ")]\n            self.assertGreaterEqual(len(lines), 3)\n            events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in lines]\n            self.assertTrue(all(event["operation"] == "client.files.import.execute" for event in events))\n            self.assertEqual(events[-1]["phase"], "complete")\n            self.assertEqual(events[-1]["completed"], 2)\n            self.assertEqual(events[-1]["total"], 2)\n\n'''
+          test = '''    def test_import_execute_progress_is_opt_in_and_preserves_stdout_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); project = fixture(root / "studio")
+            source = root / "delivery"; source.mkdir()
+            (source / "one.wav").write_bytes(b"one")
+            (source / "two.wav").write_bytes(b"two")
+            planned = run(project, "client-files", "import-plan", "--json", "--source-kind", "folder", "--source", str(source))
+            plan = json.loads(planned.stdout)["data"]["plan"]
+            executed = run(project, "client-files", "import-execute", "--json", "--source-kind", "folder", "--source", str(source), "--plan-id", plan["plan_id"], "--progress=stderr-json")
+            self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
+            payload = json.loads(executed.stdout)
+            self.assertEqual(payload["operation"], "client.files.import.execute")
+            lines = [line for line in executed.stderr.splitlines() if line.startswith("JL_PROGRESS ")]
+            self.assertGreaterEqual(len(lines), 3)
+            events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in lines]
+            self.assertTrue(all(event["operation"] == "client.files.import.execute" for event in events))
+            self.assertEqual(events[-1]["phase"], "complete")
+            self.assertEqual(events[-1]["completed"], 2)
+            self.assertEqual(events[-1]["total"], 2)
+
+'''
           if test not in text:
               if anchor not in text: raise SystemExit('missing managed API test anchor')
               p.write_text(text.replace(anchor, test + anchor, 1))
+          PY
       - name: Run focused tests
+        shell: bash
         run: |
           python -m unittest tests.python.test_managed_client_files_api tests.python.test_system_info
           bash tests/unit/test-api-system-info.sh
       - name: Remove temporary workflow and commit
+        shell: bash
         run: |
           rm .github/workflows/temp-160-implementation.yml
           git config user.name github-actions[bot]
