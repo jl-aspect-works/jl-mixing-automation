@@ -330,9 +330,14 @@ def execute_plan(
     completed_files = 0
     remaining_by_source = {relative: sum(1 for item in plan["items"] if item["source_relative_path"] == relative) for relative in source_objects}
 
-    def emit_progress(phase: str, active: list[str]) -> None:
+    def emit_progress(phase: str, active: list[str], *, completed: int | None = None) -> None:
         if progress is not None:
-            progress({"phase": phase, "completed": completed_files, "total": total_files, "active": active})
+            progress({
+                "phase": phase,
+                "completed": completed_files if completed is None else completed,
+                "total": total_files,
+                "active": active,
+            })
 
     def complete_item(item: dict[str, Any]) -> None:
         nonlocal completed_files
