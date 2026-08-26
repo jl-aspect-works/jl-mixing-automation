@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,9 @@ from ..context import resolve_project, studio_root
 from ..errors import ArgumentError, ContextError, JLMixingError, UnsafeOperationError, ValidationError
 from ..managed_client_file_provenance import execute_plan, plan_import, plan_reset
 from ..versions import api_version
+
+_PROGRESS_PREFIX = "JL_PROGRESS "
+_PROGRESS_MODE = "stderr-json"
 
 
 @dataclass(frozen=True)
@@ -21,6 +25,7 @@ class ImportRequest:
     plan_id: str | None = None
     decisions: dict[str, str] | None = None
     selected_relative_paths: tuple[str, ...] | None = None
+    progress: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,14 @@ def _error(operation: str, code: str, message: str, exit_code: int, *, status: s
 
 def _project_data(root: Path) -> dict[str, str]:
     return {"path": str(root), "workspace_path": str(studio_root(root))}
+
+
+def _emit_progress(operation: str, event: dict[str, Any]) -> None:
+    print(
+        _PROGRESS_PREFIX + json.dumps({"operation": operation, **event}, separators=(",", ":"), sort_keys=True),
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _selected_import_plan(plan: dict[str, Any], selected_relative_paths: tuple[str, ...] | None) -> dict[str, Any]:
@@ -85,7 +98,8 @@ def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
         if full_plan["plan_id"] != request.plan_id:
             raise ValidationError("Import plan is stale; run import-plan again.")
         plan = _selected_import_plan(full_plan, request.selected_relative_paths)
-        result = execute_plan(root, plan, request.decisions or {})
+        progress_callback = (lambda event: _emit_progress(operation, event)) if request.progress == _PROGRESS_MODE else None
+        result = execute_plan(root, plan, request.decisions or {}, progress=progress_callback)
         return _envelope(operation, "success", {"project": _project_data(root), "plan_id": full_plan["plan_id"], "result": result}), 0
     except ContextError as exc: return _error(operation, "PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
     except UnsafeOperationError as exc: return _error(operation, "UNSAFE_OPERATION", str(exc), exc.exit_code, status="blocked"), exc.exit_code
@@ -143,11 +157,20 @@ def _parse_decisions(raw: str) -> dict[str, str]:
 
 def parse_import_args(args: list[str], *, execute: bool) -> ImportRequest:
     project: Path | None = None; source_kind: str | None = None; sources: list[Path] = []
-    plan_id: str | None = None; decisions: dict[str, str] | None = None; selected_relative_paths: list[str] = []
+    plan_id: str | None = None; decisions: dict[str, str] | None = None; selected_relative_paths: list[str] = []; progress: str | None = None
     json_seen = 0; index = 0
     while index < len(args):
         arg = args[index]
         if arg == "--json": json_seen += 1
+        elif arg.startswith("--progress="):
+            value = arg.split("=", 1)[1]
+            if not execute:
+                raise ArgumentError("import-plan does not accept --progress.")
+            if value != _PROGRESS_MODE:
+                raise ArgumentError(f"Unsupported managed import progress mode: {value}. Expected {_PROGRESS_MODE}.")
+            if progress is not None:
+                raise ArgumentError("import-execute accepts at most one --progress option.")
+            progress = value
         elif arg in {"--project", "--source-kind", "--source", "--plan-id", "--decisions-json", "--include-relative-path"}:
             index += 1
             if index >= len(args): raise ArgumentError(f"{arg} requires a value.")
@@ -165,7 +188,7 @@ def parse_import_args(args: list[str], *, execute: bool) -> ImportRequest:
     if not sources: raise ArgumentError("At least one --source is required.")
     if not execute and (plan_id is not None or decisions is not None or selected_relative_paths): raise ArgumentError("import-plan does not accept execute-only options.")
     if execute and plan_id is None: raise ArgumentError("import-execute requires --plan-id.")
-    return ImportRequest(project, source_kind, tuple(sources), plan_id, decisions, tuple(selected_relative_paths) if selected_relative_paths else None)
+    return ImportRequest(project, source_kind, tuple(sources), plan_id, decisions, tuple(selected_relative_paths) if selected_relative_paths else None, progress)
 
 
 def parse_reset_args(args: list[str], *, execute: bool) -> ResetRequest:
