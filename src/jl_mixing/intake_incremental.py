@@ -15,7 +15,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from .intake import IntakeResult, validate_intake
+from .intake import IntakeResult, ProgressCallback, validate_intake
 
 
 def _normalized_format(value: str | None) -> str | None:
@@ -178,6 +178,7 @@ def validate_intake_incremental(
     ffmpeg_path: str | None = None,
     cache_path: Path | None = None,
     update_cache: bool = True,
+    progress: ProgressCallback | None = None,
 ) -> IntakeResult:
     resolved_ffprobe = _tool_value(ffprobe_path, "ffprobe")
     resolved_ffmpeg = _tool_value(ffmpeg_path, "ffmpeg")
@@ -212,6 +213,7 @@ def validate_intake_incremental(
         ffmpeg_path=resolved_ffmpeg or "",
         cache_path=active_cache,
         update_cache=update_cache,
+        progress=progress,
     )
     result = _preserve_human_report_compatibility(result, duplicate_check=duplicate_check)
 
