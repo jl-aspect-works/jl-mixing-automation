@@ -177,6 +177,28 @@ class ManagedClientFilesApiTests(unittest.TestCase):
             stale = run(project, "client-files", "import-execute", "--json", "--source-kind", "files", "--source", str(source), "--plan-id", plan["plan_id"])
             self.assertEqual(stale.returncode, 5)
 
+    def test_import_execute_progress_is_opt_in_and_preserves_stdout_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = fixture(root / "studio")
+            source = root / "delivery"
+            source.mkdir()
+            (source / "one.wav").write_bytes(b"one")
+            (source / "two.wav").write_bytes(b"two")
+            planned = run(project, "client-files", "import-plan", "--json", "--source-kind", "folder", "--source", str(source))
+            plan = json.loads(planned.stdout)["data"]["plan"]
+            executed = run(project, "client-files", "import-execute", "--json", "--source-kind", "folder", "--source", str(source), "--plan-id", plan["plan_id"], "--progress=stderr-json")
+            self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
+            payload = json.loads(executed.stdout)
+            self.assertEqual(payload["operation"], "client.files.import.execute")
+            lines = [line for line in executed.stderr.splitlines() if line.startswith("JL_PROGRESS ")]
+            self.assertGreaterEqual(len(lines), 3)
+            events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in lines]
+            self.assertTrue(all(event["operation"] == "client.files.import.execute" for event in events))
+            self.assertEqual(events[-1]["phase"], "complete")
+            self.assertEqual(events[-1]["completed"], 2)
+            self.assertEqual(events[-1]["total"], 2)
+
     def test_discovery_advertises_managed_capabilities(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = fixture(Path(tmp))

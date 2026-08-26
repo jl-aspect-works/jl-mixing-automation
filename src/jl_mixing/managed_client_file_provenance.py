@@ -234,7 +234,13 @@ def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result:
         _write(project_root, document)
 
 
-def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, str]) -> dict[str, Any]:
-    result = base.execute_plan(project_root, plan, decisions)
+def execute_plan(
+    project_root: Path,
+    plan: dict[str, Any],
+    decisions: dict[str, str],
+    *,
+    progress: base.ProgressCallback | None = None,
+) -> dict[str, Any]:
+    result = base.execute_plan(project_root, plan, decisions, progress=progress)
     _record_successful_lineage(project_root, plan, result)
     return result

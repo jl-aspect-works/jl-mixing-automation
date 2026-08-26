@@ -10,7 +10,7 @@ import stat
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .errors import UnsafeOperationError, ValidationError
 from .transactions import create_staging_directory
@@ -19,6 +19,7 @@ ORIGINAL_ROOT = Path("01_Client_Files") / "Original_Delivery"
 AUDIO_ROOT = Path("02_Audio_Preparation") / "Working_Audio"
 INTAKE_CACHE = Path("00_Admin") / "intake-validation-cache.json"
 AUDIO_CACHE = Path("00_Admin") / "audio-prep-validation-cache.json"
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 @dataclass(frozen=True)
@@ -310,7 +311,13 @@ def _invalidate(project_root: Path, changed_original: bool, changed_audio: bool)
     return invalidated
 
 
-def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, str]) -> dict[str, Any]:
+def execute_plan(
+    project_root: Path,
+    plan: dict[str, Any],
+    decisions: dict[str, str],
+    *,
+    progress: ProgressCallback | None = None,
+) -> dict[str, Any]:
     decisions = _decisions(plan, decisions)
     source_objects = {
         data["relative_path"]: SourceFile(
@@ -319,6 +326,22 @@ def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, 
         )
         for data in plan["files"]
     }
+    total_files = len(source_objects)
+    completed_files = 0
+    remaining_by_source = {relative: sum(1 for item in plan["items"] if item["source_relative_path"] == relative) for relative in source_objects}
+
+    def emit_progress(phase: str, active: list[str]) -> None:
+        if progress is not None:
+            progress({"phase": phase, "completed": completed_files, "total": total_files, "active": active})
+
+    def complete_item(item: dict[str, Any]) -> None:
+        nonlocal completed_files
+        relative = item["source_relative_path"]
+        remaining_by_source[relative] -= 1
+        if remaining_by_source[relative] == 0:
+            completed_files += 1
+        emit_progress("importing", [relative] if remaining_by_source[relative] else [])
+
     transaction = create_staging_directory(project_root / "00_Admin", ".jl-managed-import-")
     stage = transaction / "stage"
     backups = transaction / "backups"
@@ -328,15 +351,23 @@ def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, 
     changed_original = False
     changed_audio = False
     try:
-        staged = {relative: _stage_source(source, stage) for relative, source in source_objects.items()}
+        staged: dict[str, Path] = {}
+        for relative, source in source_objects.items():
+            emit_progress("staging", [relative])
+            staged[relative] = _stage_source(source, stage)
+        emit_progress("importing", [])
         item_by_id = {item["id"]: item for item in plan["items"]}
         for position, item in enumerate(plan["items"]):
+            relative = item["source_relative_path"]
+            emit_progress("importing", [relative])
             dependency = item.get("depends_on")
             if dependency and any(result["id"] == dependency and result["result"] == "skipped" for result in results):
                 results.append({"id": item["id"], "result": "skipped"})
+                complete_item(item)
                 continue
             if item["conflict"] and decisions.get(item["id"]) == "skip":
                 results.append({"id": item["id"], "result": "skipped"})
+                complete_item(item)
                 continue
             destination = _managed_destination(project_root, item["destination_relative_path"])
             if _file_state(destination) != item["destination_state"]:
@@ -361,7 +392,9 @@ def execute_plan(project_root: Path, plan: dict[str, Any], decisions: dict[str, 
             changed_original = changed_original or item["area"] == "original_delivery"
             changed_audio = changed_audio or item["area"] == "audio_prep"
             results.append({"id": item["id"], "result": "replaced" if backup else "created"})
+            complete_item(item)
         invalidated = _invalidate(project_root, changed_original, changed_audio)
+        emit_progress("complete", [])
         return {"items": results, "invalidations": invalidated}
     except Exception:
         for destination, backup in reversed(applied):
