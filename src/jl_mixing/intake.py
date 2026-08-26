@@ -75,6 +75,7 @@ def ffmpeg_decode_check(path: Path, executable: str = "ffmpeg") -> str | None:
 
 
 def _channel_hash(path: Path, channel: int, executable: str) -> str | None:
+    """Legacy single-channel helper retained for direct callers/tests."""
     result = subprocess.run(
         [
             executable, "-v", "error", "-i", str(path), "-map", "0:a:0",
@@ -91,6 +92,7 @@ def _channel_hash(path: Path, channel: int, executable: str) -> str | None:
 
 
 def exact_dual_mono(path: Path, metadata: dict[str, Any] | None, executable: str) -> bool | None:
+    """Legacy exact comparison helper retained for direct callers/tests."""
     if not metadata or metadata.get("channels") != 2:
         return False
     left = _channel_hash(path, 0, executable)
@@ -98,6 +100,58 @@ def exact_dual_mono(path: Path, metadata: dict[str, Any] | None, executable: str
     if left is None or right is None:
         return None
     return left == right
+
+
+def _parse_stereo_framehash(output: str) -> bool | None:
+    streams: dict[int, list[str]] = {0: [], 1: []}
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = [field.strip() for field in line.split(",")]
+        if len(fields) < 6:
+            continue
+        try:
+            stream_index = int(fields[0])
+        except ValueError:
+            continue
+        if stream_index in streams:
+            streams[stream_index].append(fields[-1])
+    left = streams[0]
+    right = streams[1]
+    if not left or not right or len(left) != len(right):
+        return None
+    return left == right
+
+
+def ffmpeg_decode_and_dual_mono(path: Path, executable: str = "ffmpeg") -> tuple[str | None, bool | None]:
+    """Decode stereo audio once while hashing both decoded channels frame-by-frame."""
+    result = subprocess.run(
+        [
+            executable,
+            "-v",
+            "error",
+            "-i",
+            str(path),
+            "-filter_complex",
+            "[0:a:0]channelsplit=channel_layout=stereo[left][right]",
+            "-map",
+            "[left]",
+            "-map",
+            "[right]",
+            "-f",
+            "framehash",
+            "-hash",
+            "sha256",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return result.stderr.strip() or "ffmpeg could not decode the complete audio file", None
+    return None, _parse_stereo_framehash(result.stdout)
 
 
 def _format_technical(metadata: dict[str, Any] | None, inspection: str) -> str:
@@ -269,8 +323,10 @@ def validate_intake(
             findings: list[dict[str, Any]] = []
             decode_ok: bool | None = None
             dual_mono: bool | None = None
+            digest: str | None = None
 
             if is_audio:
+                digest = sha256_file(path)
                 if ffprobe_available:
                     metadata, probe_error = ffprobe_metadata(path, str(detected_ffprobe))
                     if probe_error:
@@ -288,20 +344,23 @@ def validate_intake(
                     ))
 
                 if ffmpeg_available:
-                    decode_error = ffmpeg_decode_check(path, str(detected_ffmpeg))
+                    if metadata and metadata.get("channels") == 2:
+                        decode_error, dual_mono = ffmpeg_decode_and_dual_mono(
+                            path, str(detected_ffmpeg)
+                        )
+                    else:
+                        decode_error = ffmpeg_decode_check(path, str(detected_ffmpeg))
                     decode_ok = decode_error is None
                     if decode_error:
                         findings.append(_finding(
                             "DECODE_INTEGRITY_FAILED", "critical",
                             f"Full-file decode integrity check failed: {decode_error}",
                         ))
-                    elif metadata and metadata.get("channels") == 2:
-                        dual_mono = exact_dual_mono(path, metadata, str(detected_ffmpeg))
-                        if dual_mono:
-                            findings.append(_finding(
-                                "EXACT_DUAL_MONO", "info",
-                                "Stereo left and right channels are exactly identical.",
-                            ))
+                    elif dual_mono:
+                        findings.append(_finding(
+                            "EXACT_DUAL_MONO", "info",
+                            "Stereo left and right channels are exactly identical.",
+                        ))
                 else:
                     findings.append(_finding(
                         "FFMPEG_UNAVAILABLE", "warning",
@@ -335,7 +394,7 @@ def validate_intake(
                 **cache_identity(path),
                 "relative_path": relative,
                 "is_audio": is_audio,
-                "sha256": None,
+                "sha256": digest,
                 "metadata": metadata,
                 "inspection": inspection,
                 "decode_ok": decode_ok,
@@ -365,31 +424,11 @@ def validate_intake(
         file_results.append(record)
 
     if duplicate_check:
-        candidate_groups: dict[tuple[int, str], list[dict[str, Any]]] = {}
-        for record in file_results:
-            if not record.get("is_audio"):
-                continue
-            size = record.get("size_bytes")
-            fingerprint = record.get("fingerprint")
-            if isinstance(size, int) and isinstance(fingerprint, str) and fingerprint:
-                candidate_groups.setdefault((size, fingerprint), []).append(record)
-        duplicate_candidates = [group for group in candidate_groups.values() if len(group) > 1]
-        hash_records = [record for group in duplicate_candidates for record in group if not record.get("sha256")]
-
-        def calculate_hash(record: dict[str, Any]) -> tuple[dict[str, Any], str]:
-            return record, sha256_file(source / Path(str(record["relative_path"])))
-
-        if hash_records:
-            with ThreadPoolExecutor(max_workers=_VALIDATION_WORKERS, thread_name_prefix="intake-hash") as executor:
-                for record, digest in executor.map(calculate_hash, hash_records):
-                    record["sha256"] = digest
-
         by_hash: dict[str, list[dict[str, Any]]] = {}
-        for group in duplicate_candidates:
-            for record in group:
-                digest = record.get("sha256")
-                if isinstance(digest, str) and digest:
-                    by_hash.setdefault(digest, []).append(record)
+        for record in file_results:
+            digest = record.get("sha256")
+            if record.get("is_audio") and isinstance(digest, str) and digest:
+                by_hash.setdefault(digest, []).append(record)
         for group in by_hash.values():
             if len(group) < 2:
                 continue
