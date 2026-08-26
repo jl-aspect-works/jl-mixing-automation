@@ -195,6 +195,10 @@ class ManagedClientFilesApiTests(unittest.TestCase):
             self.assertGreaterEqual(len(lines), 3)
             events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in lines]
             self.assertTrue(all(event["operation"] == "client.files.import.execute" for event in events))
+            staging_completed = [event["completed"] for event in events if event["phase"] == "staging"]
+            self.assertEqual(staging_completed[0], 0)
+            self.assertEqual(staging_completed[-1], 2)
+            self.assertIn(1, staging_completed)
             self.assertEqual(events[-1]["phase"], "complete")
             self.assertEqual(events[-1]["completed"], 2)
             self.assertEqual(events[-1]["total"], 2)
