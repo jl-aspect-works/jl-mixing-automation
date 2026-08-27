@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 import tempfile
 import unittest
 import zipfile
@@ -7,6 +8,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from jl_mixing import managed_client_file_provenance as provenance
+
+
+def _write_regular(handle: zipfile.ZipFile, name: str, content: bytes) -> None:
+    info = zipfile.ZipInfo(name)
+    info.create_system = 3
+    info.external_attr = (stat.S_IFREG | 0o644) << 16
+    handle.writestr(info, content)
 
 
 class ZipProvenancePlanningTests(unittest.TestCase):
@@ -17,8 +25,8 @@ class ZipProvenancePlanningTests(unittest.TestCase):
             (project / "00_Admin").mkdir(parents=True)
             archive = root / "delivery.zip"
             with zipfile.ZipFile(archive, "w") as handle:
-                handle.writestr("mix.wav", b"audio-data")
-                handle.writestr("Stems/bass.wav", b"bass-data")
+                _write_regular(handle, "mix.wav", b"audio-data")
+                _write_regular(handle, "Stems/bass.wav", b"bass-data")
 
             with patch.object(provenance.base, "_sha256_file", wraps=provenance.base._sha256_file) as sha256_file:
                 plan = provenance.plan_import(project, "zip", (archive,))
@@ -39,7 +47,7 @@ class ZipProvenancePlanningTests(unittest.TestCase):
             working.write_bytes(b"same-audio")
             archive = root / "delivery.zip"
             with zipfile.ZipFile(archive, "w") as handle:
-                handle.writestr("mix.wav", b"new-audio")
+                _write_regular(handle, "mix.wav", b"new-audio")
 
             plan = provenance.plan_import(project, "zip", (archive,))
             audio_item = next(item for item in plan["items"] if item["area"] == "audio_prep")
