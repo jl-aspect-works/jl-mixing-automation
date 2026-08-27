@@ -11,14 +11,20 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
+from . import diagnostic_log
 from .errors import UnsafeOperationError, ValidationError
 from . import managed_client_files as base
 
 PROVENANCE_PATH = Path("00_Admin") / "audio-prep-provenance.json"
 SCHEMA_VERSION = 1
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000.0, 3)
 
 
 def _empty_document() -> dict[str, Any]:
@@ -91,12 +97,21 @@ class _WorkingHashIndex:
         self._by_hash: dict[str, list[str]] | None = None
 
     def _build(self) -> dict[str, list[str]]:
+        started = time.perf_counter()
         audio_root = self.project_root / base.AUDIO_ROOT
         if not audio_root.exists():
+            diagnostic_log.info(
+                "managed_import_working_hash_index_profile",
+                file_count=0,
+                total_bytes=0,
+                elapsed_ms=_elapsed_ms(started),
+            )
             return {}
         if audio_root.is_symlink() or not audio_root.is_dir():
             raise UnsafeOperationError(f"Audio Prep root is unavailable or unsafe: {audio_root}")
         by_hash: dict[str, list[str]] = {}
+        file_count = 0
+        total_bytes = 0
         for current, dirs, names in os.walk(audio_root, followlinks=False):
             current_path = Path(current)
             for directory in dirs:
@@ -106,9 +121,24 @@ class _WorkingHashIndex:
                 candidate = current_path / name
                 if candidate.is_symlink() or not candidate.is_file():
                     continue
+                size = candidate.stat().st_size
+                hash_started = time.perf_counter()
                 digest = base._sha256_file(candidate)
+                diagnostic_log.debug(
+                    "managed_import_working_hash_file_profile",
+                    size_bytes=size,
+                    elapsed_ms=_elapsed_ms(hash_started),
+                )
                 relative = (base.AUDIO_ROOT / candidate.relative_to(audio_root)).as_posix()
                 by_hash.setdefault(digest, []).append(relative)
+                file_count += 1
+                total_bytes += size
+        diagnostic_log.info(
+            "managed_import_working_hash_index_profile",
+            file_count=file_count,
+            total_bytes=total_bytes,
+            elapsed_ms=_elapsed_ms(started),
+        )
         return by_hash
 
     def match(self, digest: str, *, ambiguity_message: str) -> str | None:
@@ -141,7 +171,15 @@ def _lineage_destination(project_root: Path, source_relative: str, provenance: d
 def _fallback_match(source_relative: str, candidate: Path | None, working_index: _WorkingHashIndex) -> str | None:
     if candidate is None or not candidate.is_file():
         return None
+    size = candidate.stat().st_size
+    started = time.perf_counter()
     source_hash = base._sha256_file(candidate)
+    diagnostic_log.debug(
+        "managed_import_fallback_hash_profile",
+        source_relative_path=source_relative,
+        size_bytes=size,
+        elapsed_ms=_elapsed_ms(started),
+    )
     return working_index.match(source_hash, ambiguity_message=f"Multiple Audio Prep files match Original Delivery content for {source_relative}; repair is required before reset.")
 
 
@@ -150,9 +188,17 @@ def _resolved_destination(project_root: Path, source_relative: str, fallback_sou
 
 
 def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...]) -> dict[str, Any]:
+    total_started = time.perf_counter()
+    base_started = time.perf_counter()
     plan = base.plan_import(project_root, source_kind, sources)
+    base_plan_ms = _elapsed_ms(base_started)
+
+    provenance_started = time.perf_counter()
     source_objects = {source.relative_path: source for source in _source_objects(plan)}
     provenance = _provenance_by_source(_load(project_root))
+    provenance_load_ms = _elapsed_ms(provenance_started)
+
+    resolution_started = time.perf_counter()
     working_index = _WorkingHashIndex(project_root)
     items: list[dict[str, Any]] = []
     for item in plan["items"]:
@@ -167,8 +213,23 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
             items.append(base._item(project_root, item["id"], "audio_prep", destination, source_objects[source_relative], depends_on=item.get("depends_on")))
         else:
             items.append(item)
+    resolution_ms = _elapsed_ms(resolution_started)
+
+    finalize_started = time.perf_counter()
     plan["items"] = items
     plan["plan_id"] = base._plan_id("client.files.import", source_kind, sources, source_objects.values(), items)
+    finalize_ms = _elapsed_ms(finalize_started)
+    diagnostic_log.info(
+        "managed_import_provenance_plan_profile",
+        source_kind=source_kind,
+        file_count=len(source_objects),
+        provenance_entry_count=len(provenance),
+        base_plan_ms=base_plan_ms,
+        provenance_load_ms=provenance_load_ms,
+        resolution_ms=resolution_ms,
+        finalize_ms=finalize_ms,
+        total_ms=_elapsed_ms(total_started),
+    )
     return plan
 
 
@@ -204,10 +265,17 @@ def plan_reset(project_root: Path, relative_paths: tuple[str, ...]) -> dict[str,
 
 
 def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result: dict[str, Any]) -> None:
+    total_started = time.perf_counter()
     statuses = {item["id"]: item["result"] for item in result.get("items", [])}
+    load_started = time.perf_counter()
     document = _load(project_root)
+    load_ms = _elapsed_ms(load_started)
     entries = list(document["entries"])
     changed = False
+    source_hash_ms = 0.0
+    working_hash_ms = 0.0
+    hashed_bytes = 0
+    recorded_count = 0
     for item in plan["items"]:
         if item["area"] != "audio_prep" or statuses.get(item["id"]) not in {"created", "replaced"}:
             continue
@@ -217,21 +285,54 @@ def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result:
         working_path = base._managed_destination(project_root, working_relative)
         if not source_path.is_file() or not working_path.is_file():
             continue
+        source_size = source_path.stat().st_size
+        working_size = working_path.stat().st_size
+        source_started = time.perf_counter()
+        source_hash = base._sha256_file(source_path)
+        source_elapsed = _elapsed_ms(source_started)
+        source_hash_ms += source_elapsed
+        working_started = time.perf_counter()
+        working_hash = base._sha256_file(working_path)
+        working_elapsed = _elapsed_ms(working_started)
+        working_hash_ms += working_elapsed
+        hashed_bytes += source_size + working_size
+        diagnostic_log.debug(
+            "managed_import_provenance_hash_file_profile",
+            source_relative_path=source_relative,
+            source_size_bytes=source_size,
+            working_size_bytes=working_size,
+            source_hash_ms=source_elapsed,
+            working_hash_ms=working_elapsed,
+        )
         source_key = source_relative.casefold()
         working_key = working_relative.casefold()
         entries = [entry for entry in entries if str(entry.get("source_relative_path", "")).casefold() != source_key and str(entry.get("working_relative_path", "")).casefold() != working_key]
         entries.append({
             "source_relative_path": source_relative,
             "working_relative_path": working_relative,
-            "source_sha256": base._sha256_file(source_path),
-            "working_sha256": base._sha256_file(working_path),
+            "source_sha256": source_hash,
+            "working_sha256": working_hash,
             "transformations": ["copied"],
         })
+        recorded_count += 1
         changed = True
+    write_ms = 0.0
     if changed:
         entries.sort(key=lambda entry: str(entry["source_relative_path"]).casefold())
         document["entries"] = entries
+        write_started = time.perf_counter()
         _write(project_root, document)
+        write_ms = _elapsed_ms(write_started)
+    diagnostic_log.info(
+        "managed_import_provenance_finalize_profile",
+        recorded_count=recorded_count,
+        hashed_bytes=hashed_bytes,
+        load_ms=load_ms,
+        source_hash_ms=round(source_hash_ms, 3),
+        working_hash_ms=round(working_hash_ms, 3),
+        write_ms=write_ms,
+        total_ms=_elapsed_ms(total_started),
+    )
 
 
 def execute_plan(
@@ -241,6 +342,17 @@ def execute_plan(
     *,
     progress: base.ProgressCallback | None = None,
 ) -> dict[str, Any]:
+    total_started = time.perf_counter()
+    base_started = time.perf_counter()
     result = base.execute_plan(project_root, plan, decisions, progress=progress)
+    base_execute_ms = _elapsed_ms(base_started)
+    lineage_started = time.perf_counter()
     _record_successful_lineage(project_root, plan, result)
+    lineage_ms = _elapsed_ms(lineage_started)
+    diagnostic_log.info(
+        "managed_import_provenance_execute_profile",
+        base_execute_ms=base_execute_ms,
+        lineage_ms=lineage_ms,
+        total_ms=_elapsed_ms(total_started),
+    )
     return result
