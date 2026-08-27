@@ -69,7 +69,6 @@ class _ImportProgressAdapter:
         self.operation = operation
         self.total_files = total_files
         self.overall_total = total_files * 2 + 1
-        self.staging_seen = 0
         self.staging_complete_emitted = False
         self.finalizing_emitted = False
 
@@ -97,9 +96,9 @@ class _ImportProgressAdapter:
         completed = max(0, min(int(event.get("completed", 0)), self.total_files))
 
         if phase == "staging":
-            stage_completed = min(self.staging_seen, self.total_files)
-            self._emit("staging", stage_completed, active, stage_completed)
-            self.staging_seen += 1
+            self._emit("staging", completed, active, completed)
+            if completed >= self.total_files:
+                self.staging_complete_emitted = True
             return
 
         if phase == "importing":

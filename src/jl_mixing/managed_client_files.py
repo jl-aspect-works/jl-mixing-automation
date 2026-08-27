@@ -330,9 +330,14 @@ def execute_plan(
     completed_files = 0
     remaining_by_source = {relative: sum(1 for item in plan["items"] if item["source_relative_path"] == relative) for relative in source_objects}
 
-    def emit_progress(phase: str, active: list[str]) -> None:
+    def emit_progress(phase: str, active: list[str], *, completed: int | None = None) -> None:
         if progress is not None:
-            progress({"phase": phase, "completed": completed_files, "total": total_files, "active": active})
+            progress({
+                "phase": phase,
+                "completed": completed_files if completed is None else completed,
+                "total": total_files,
+                "active": active,
+            })
 
     def complete_item(item: dict[str, Any]) -> None:
         nonlocal completed_files
@@ -352,9 +357,12 @@ def execute_plan(
     changed_audio = False
     try:
         staged: dict[str, Path] = {}
+        staged_files = 0
         for relative, source in source_objects.items():
-            emit_progress("staging", [relative])
+            emit_progress("staging", [relative], completed=staged_files)
             staged[relative] = _stage_source(source, stage)
+            staged_files += 1
+            emit_progress("staging", [relative], completed=staged_files)
         emit_progress("importing", [])
         item_by_id = {item["id"]: item for item in plan["items"]}
         for position, item in enumerate(plan["items"]):
