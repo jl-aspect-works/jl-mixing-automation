@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -369,6 +370,10 @@ def execute_plan(
     cleanup_ms = 0.0
     staged_bytes = 0
     written_bytes = 0
+    copied_bytes = 0
+    moved_bytes = 0
+    copied_items = 0
+    moved_items = 0
 
     setup_started = time.perf_counter()
     decisions = _decisions(plan, decisions)
@@ -466,21 +471,51 @@ def execute_plan(
                 os.replace(destination, backup)
             backup_ms = _elapsed_ms(backup_started)
             applied.append((destination, backup))
-            if item["area"] == "audio_prep" and dependency:
-                original_item = item_by_id[dependency]
-                authoritative_source = _managed_destination(project_root, original_item["destination_relative_path"])
-                copy_source = authoritative_source if authoritative_source.exists() else staged[item["source_relative_path"]]
+            copy_ms = 0.0
+            replace_ms = 0.0
+            transfer_method = "copy"
+            size_bytes = int(item.get("size_bytes", 0))
+            if item["area"] == "original_delivery":
+                staged_source = staged[item["source_relative_path"]]
+                replace_started = time.perf_counter()
+                try:
+                    os.replace(staged_source, destination)
+                    replace_ms = _elapsed_ms(replace_started)
+                    transfer_method = "move"
+                    moved_bytes += size_bytes
+                    moved_items += 1
+                except OSError as exc:
+                    if exc.errno != errno.EXDEV:
+                        raise
+                    replace_ms = _elapsed_ms(replace_started)
+                    writes.mkdir(parents=True, exist_ok=True)
+                    temp_dest = writes / f"write-{position}.tmp"
+                    copy_started = time.perf_counter()
+                    shutil.copyfile(staged_source, temp_dest)
+                    copy_ms = _elapsed_ms(copy_started)
+                    replace_started = time.perf_counter()
+                    os.replace(temp_dest, destination)
+                    replace_ms += _elapsed_ms(replace_started)
+                    copied_bytes += size_bytes
+                    copied_items += 1
             else:
-                copy_source = staged[item["source_relative_path"]]
-            writes.mkdir(parents=True, exist_ok=True)
-            temp_dest = writes / f"write-{position}.tmp"
-            copy_started = time.perf_counter()
-            shutil.copyfile(copy_source, temp_dest)
-            copy_ms = _elapsed_ms(copy_started)
-            replace_started = time.perf_counter()
-            os.replace(temp_dest, destination)
-            replace_ms = _elapsed_ms(replace_started)
-            written_bytes += int(item.get("size_bytes", 0))
+                if item["area"] == "audio_prep" and dependency:
+                    original_item = item_by_id[dependency]
+                    authoritative_source = _managed_destination(project_root, original_item["destination_relative_path"])
+                    copy_source = authoritative_source if authoritative_source.exists() else staged[item["source_relative_path"]]
+                else:
+                    copy_source = staged[item["source_relative_path"]]
+                writes.mkdir(parents=True, exist_ok=True)
+                temp_dest = writes / f"write-{position}.tmp"
+                copy_started = time.perf_counter()
+                shutil.copyfile(copy_source, temp_dest)
+                copy_ms = _elapsed_ms(copy_started)
+                replace_started = time.perf_counter()
+                os.replace(temp_dest, destination)
+                replace_ms = _elapsed_ms(replace_started)
+                copied_bytes += size_bytes
+                copied_items += 1
+            written_bytes += size_bytes
             changed_original = changed_original or item["area"] == "original_delivery"
             changed_audio = changed_audio or item["area"] == "audio_prep"
             result_name = "replaced" if backup else "created"
@@ -489,8 +524,9 @@ def execute_plan(
                 "managed_import_write_item_profile",
                 relative_path=relative,
                 area=item["area"],
-                size_bytes=int(item.get("size_bytes", 0)),
+                size_bytes=size_bytes,
                 result=result_name,
+                transfer_method=transfer_method,
                 backup_ms=backup_ms,
                 copy_ms=copy_ms,
                 replace_ms=replace_ms,
@@ -539,6 +575,10 @@ def execute_plan(
             item_count=len(plan["items"]),
             staged_bytes=staged_bytes,
             written_bytes=written_bytes,
+            copied_bytes=copied_bytes,
+            moved_bytes=moved_bytes,
+            copied_items=copied_items,
+            moved_items=moved_items,
             created_count=result_counts["created"],
             replaced_count=result_counts["replaced"],
             skipped_count=result_counts["skipped"],
