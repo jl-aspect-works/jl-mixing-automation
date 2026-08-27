@@ -206,11 +206,12 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
             items.append(item)
             continue
         source_relative = item["source_relative_path"]
+        source = source_objects[source_relative]
         existing_original = base._managed_destination(project_root, (base.ORIGINAL_ROOT / Path(source_relative)).as_posix())
-        fallback = existing_original if existing_original.is_file() else source_objects[source_relative].source_path
+        fallback = existing_original if existing_original.is_file() else (None if source.zip_member is not None else source.source_path)
         destination = _resolved_destination(project_root, source_relative, fallback, provenance, working_index)
         if destination:
-            items.append(base._item(project_root, item["id"], "audio_prep", destination, source_objects[source_relative], depends_on=item.get("depends_on")))
+            items.append(base._item(project_root, item["id"], "audio_prep", destination, source, depends_on=item.get("depends_on")))
         else:
             items.append(item)
     resolution_ms = _elapsed_ms(resolution_started)
