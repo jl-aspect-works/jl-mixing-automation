@@ -11,7 +11,7 @@ import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Iterable
+from typing import Any, BinaryIO, Callable, Iterable
 
 from . import diagnostic_log
 from .errors import UnsafeOperationError, ValidationError
@@ -313,17 +313,28 @@ def _decisions(plan: dict[str, Any], decisions: dict[str, str]) -> dict[str, str
     return decisions
 
 
-def _stage_source(source: SourceFile, stage: Path) -> Path:
+def _copy_stream_with_sha256(input_stream: BinaryIO, output_stream: BinaryIO) -> str:
+    digest = hashlib.sha256()
+    while True:
+        chunk = input_stream.read(1024 * 1024)
+        if not chunk:
+            break
+        output_stream.write(chunk)
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _stage_source(source: SourceFile, stage: Path) -> tuple[Path, str]:
     target = stage / Path(source.relative_path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    assert source.source_path is not None
     if source.zip_member is None:
-        assert source.source_path is not None
-        shutil.copyfile(source.source_path, target)
+        with source.source_path.open("rb") as input_stream, target.open("wb") as output_stream:
+            digest = _copy_stream_with_sha256(input_stream, output_stream)
     else:
-        assert source.source_path is not None
         with zipfile.ZipFile(source.source_path) as archive, archive.open(source.zip_member) as input_stream, target.open("wb") as output_stream:
-            shutil.copyfileobj(input_stream, output_stream)
-    return target
+            digest = _copy_stream_with_sha256(input_stream, output_stream)
+    return target, digest
 
 
 def _invalidate(project_root: Path, changed_original: bool, changed_audio: bool) -> list[str]:
@@ -346,6 +357,7 @@ def execute_plan(
     decisions: dict[str, str],
     *,
     progress: ProgressCallback | None = None,
+    content_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     total_started = time.perf_counter()
     phase = "setup"
@@ -408,7 +420,10 @@ def execute_plan(
         for relative, source in source_objects.items():
             emit_progress("staging", [relative], completed=staged_files)
             file_started = time.perf_counter()
-            staged[relative] = _stage_source(source, stage)
+            staged_path, staged_hash = _stage_source(source, stage)
+            staged[relative] = staged_path
+            if content_hashes is not None:
+                content_hashes[relative] = staged_hash
             file_ms = _elapsed_ms(file_started)
             staged_bytes += source.size
             diagnostic_log.debug(

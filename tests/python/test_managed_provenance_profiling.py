@@ -57,13 +57,16 @@ class ManagedProvenanceProfilingTests(unittest.TestCase):
                 if call.args == ("managed_import_provenance_finalize_profile",)
             ).kwargs
             self.assertEqual(finalize_profile["recorded_count"], 1)
-            self.assertEqual(finalize_profile["hashed_bytes"], len(b"audio-data") * 2)
-            self.assertGreaterEqual(finalize_profile["source_hash_ms"], 0)
-            self.assertGreaterEqual(finalize_profile["working_hash_ms"], 0)
-            self.assertIn(
-                "managed_import_provenance_hash_file_profile",
-                [call.args[0] for call in debug_log.call_args_list],
-            )
+            self.assertEqual(finalize_profile["hashed_bytes"], 0)
+            self.assertEqual(finalize_profile["reused_hash_count"], 1)
+            self.assertEqual(finalize_profile["reused_hash_bytes"], len(b"audio-data") * 2)
+            self.assertEqual(finalize_profile["source_hash_ms"], 0.0)
+            self.assertEqual(finalize_profile["working_hash_ms"], 0.0)
+            hash_profile = next(
+                call for call in debug_log.call_args_list
+                if call.args == ("managed_import_provenance_hash_file_profile",)
+            ).kwargs
+            self.assertTrue(hash_profile["reused_staged_hash"])
 
 
 if __name__ == "__main__":

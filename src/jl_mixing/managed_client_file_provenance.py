@@ -265,7 +265,12 @@ def plan_reset(project_root: Path, relative_paths: tuple[str, ...]) -> dict[str,
     }
 
 
-def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result: dict[str, Any]) -> None:
+def _record_successful_lineage(
+    project_root: Path,
+    plan: dict[str, Any],
+    result: dict[str, Any],
+    content_hashes: dict[str, str] | None = None,
+) -> None:
     total_started = time.perf_counter()
     statuses = {item["id"]: item["result"] for item in result.get("items", [])}
     load_started = time.perf_counter()
@@ -276,6 +281,8 @@ def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result:
     source_hash_ms = 0.0
     working_hash_ms = 0.0
     hashed_bytes = 0
+    reused_hash_count = 0
+    reused_hash_bytes = 0
     recorded_count = 0
     for item in plan["items"]:
         if item["area"] != "audio_prep" or statuses.get(item["id"]) not in {"created", "replaced"}:
@@ -288,15 +295,24 @@ def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result:
             continue
         source_size = source_path.stat().st_size
         working_size = working_path.stat().st_size
-        source_started = time.perf_counter()
-        source_hash = base._sha256_file(source_path)
-        source_elapsed = _elapsed_ms(source_started)
-        source_hash_ms += source_elapsed
-        working_started = time.perf_counter()
-        working_hash = base._sha256_file(working_path)
-        working_elapsed = _elapsed_ms(working_started)
-        working_hash_ms += working_elapsed
-        hashed_bytes += source_size + working_size
+        reusable_hash = content_hashes.get(source_relative) if content_hashes is not None else None
+        if reusable_hash:
+            source_hash = reusable_hash
+            working_hash = reusable_hash
+            source_elapsed = 0.0
+            working_elapsed = 0.0
+            reused_hash_count += 1
+            reused_hash_bytes += source_size + working_size
+        else:
+            source_started = time.perf_counter()
+            source_hash = base._sha256_file(source_path)
+            source_elapsed = _elapsed_ms(source_started)
+            source_hash_ms += source_elapsed
+            working_started = time.perf_counter()
+            working_hash = base._sha256_file(working_path)
+            working_elapsed = _elapsed_ms(working_started)
+            working_hash_ms += working_elapsed
+            hashed_bytes += source_size + working_size
         diagnostic_log.debug(
             "managed_import_provenance_hash_file_profile",
             source_relative_path=source_relative,
@@ -304,6 +320,7 @@ def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result:
             working_size_bytes=working_size,
             source_hash_ms=source_elapsed,
             working_hash_ms=working_elapsed,
+            reused_staged_hash=bool(reusable_hash),
         )
         source_key = source_relative.casefold()
         working_key = working_relative.casefold()
@@ -328,6 +345,8 @@ def _record_successful_lineage(project_root: Path, plan: dict[str, Any], result:
         "managed_import_provenance_finalize_profile",
         recorded_count=recorded_count,
         hashed_bytes=hashed_bytes,
+        reused_hash_count=reused_hash_count,
+        reused_hash_bytes=reused_hash_bytes,
         load_ms=load_ms,
         source_hash_ms=round(source_hash_ms, 3),
         working_hash_ms=round(working_hash_ms, 3),
@@ -345,10 +364,11 @@ def execute_plan(
 ) -> dict[str, Any]:
     total_started = time.perf_counter()
     base_started = time.perf_counter()
-    result = base.execute_plan(project_root, plan, decisions, progress=progress)
+    content_hashes: dict[str, str] = {}
+    result = base.execute_plan(project_root, plan, decisions, progress=progress, content_hashes=content_hashes)
     base_execute_ms = _elapsed_ms(base_started)
     lineage_started = time.perf_counter()
-    _record_successful_lineage(project_root, plan, result)
+    _record_successful_lineage(project_root, plan, result, content_hashes)
     lineage_ms = _elapsed_ms(lineage_started)
     diagnostic_log.info(
         "managed_import_provenance_execute_profile",
