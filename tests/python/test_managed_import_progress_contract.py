@@ -24,13 +24,15 @@ def progress_events(stderr: str) -> list[dict[str, object]]:
 
 
 class ManagedImportProgressContractTests(unittest.TestCase):
-    def test_adapter_emits_monotonic_overall_progress_until_complete(self) -> None:
+    def test_adapter_uses_engine_staging_counts_and_stays_monotonic(self) -> None:
         output = io.StringIO()
         adapter = api._ImportProgressAdapter("client.files.import.execute", 2)
 
         with redirect_stderr(output):
             adapter({"phase": "staging", "completed": 0, "total": 2, "active": ["one.wav"]})
-            adapter({"phase": "staging", "completed": 0, "total": 2, "active": ["two.wav"]})
+            adapter({"phase": "staging", "completed": 1, "total": 2, "active": ["one.wav"]})
+            adapter({"phase": "staging", "completed": 1, "total": 2, "active": ["two.wav"]})
+            adapter({"phase": "staging", "completed": 2, "total": 2, "active": ["two.wav"]})
             adapter({"phase": "importing", "completed": 0, "total": 2, "active": []})
             adapter({"phase": "importing", "completed": 1, "total": 2, "active": ["one.wav"]})
             adapter({"phase": "importing", "completed": 2, "total": 2, "active": []})
@@ -40,8 +42,8 @@ class ManagedImportProgressContractTests(unittest.TestCase):
         events = progress_events(output.getvalue())
         phases = [event["phase"] for event in events]
         self.assertEqual(phases[-2:], ["finalizing", "complete"])
-        self.assertIn("staging", phases)
-        self.assertIn("importing", phases)
+        staging = [int(event["completed"]) for event in events if event["phase"] == "staging"]
+        self.assertEqual(staging, [0, 1, 1, 2])
         overall = [int(event["overall_completed"]) for event in events]
         self.assertEqual(overall, sorted(overall))
         self.assertTrue(all(event["overall_total"] == 5 for event in events))
@@ -75,6 +77,7 @@ class ManagedImportProgressContractTests(unittest.TestCase):
         def fake_execute_plan(_root, _plan, _decisions, *, progress=None):
             assert progress is not None
             progress({"phase": "staging", "completed": 0, "total": 1, "active": ["one.wav"]})
+            progress({"phase": "staging", "completed": 1, "total": 1, "active": ["one.wav"]})
             progress({"phase": "importing", "completed": 1, "total": 1, "active": []})
             progress({"phase": "complete", "completed": 1, "total": 1, "active": []})
             return {"items": []}
