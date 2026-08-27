@@ -7,11 +7,13 @@ import json
 import os
 import shutil
 import stat
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable
 
+from . import diagnostic_log
 from .errors import UnsafeOperationError, ValidationError
 from .transactions import create_staging_directory
 
@@ -29,6 +31,10 @@ class SourceFile:
     zip_member: str | None
     size: int
     fingerprint: str
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000.0, 3)
 
 
 def _safe_relative(value: str) -> str:
@@ -222,7 +228,12 @@ def _serialized_source(source: SourceFile) -> dict[str, Any]:
 
 
 def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...]) -> dict[str, Any]:
+    total_started = time.perf_counter()
+    collect_started = time.perf_counter()
     files = _collect_files(source_kind, sources)
+    collect_ms = _elapsed_ms(collect_started)
+
+    items_started = time.perf_counter()
     items: list[dict[str, Any]] = []
     for index, source in enumerate(files):
         original_rel = (ORIGINAL_ROOT / Path(source.relative_path)).as_posix()
@@ -230,7 +241,10 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
         original_id = f"original:{index}"
         items.append(_item(project_root, original_id, "original_delivery", original_rel, source))
         items.append(_item(project_root, f"audio:{index}", "audio_prep", audio_rel, source, depends_on=original_id))
-    return {
+    items_ms = _elapsed_ms(items_started)
+
+    finalize_started = time.perf_counter()
+    result = {
         "operation": "client.files.import",
         "source_kind": source_kind,
         "sources": [str(path.expanduser().absolute()) for path in sources],
@@ -238,6 +252,21 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
         "files": [_serialized_source(source) for source in files],
         "items": items,
     }
+    finalize_ms = _elapsed_ms(finalize_started)
+    diagnostic_log.info(
+        "managed_import_plan_profile",
+        source_kind=source_kind,
+        source_count=len(sources),
+        file_count=len(files),
+        total_bytes=sum(source.size for source in files),
+        item_count=len(items),
+        conflict_count=sum(1 for item in items if item["conflict"]),
+        collect_ms=collect_ms,
+        destination_check_ms=items_ms,
+        finalize_ms=finalize_ms,
+        total_ms=_elapsed_ms(total_started),
+    )
+    return result
 
 
 def plan_reset(project_root: Path, relative_paths: tuple[str, ...]) -> dict[str, Any]:
@@ -318,6 +347,18 @@ def execute_plan(
     *,
     progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
+    total_started = time.perf_counter()
+    phase = "setup"
+    success = False
+    staging_ms = 0.0
+    importing_ms = 0.0
+    invalidation_ms = 0.0
+    rollback_ms = 0.0
+    cleanup_ms = 0.0
+    staged_bytes = 0
+    written_bytes = 0
+
+    setup_started = time.perf_counter()
     decisions = _decisions(plan, decisions)
     source_objects = {
         data["relative_path"]: SourceFile(
@@ -327,13 +368,15 @@ def execute_plan(
         for data in plan["files"]
     }
     total_files = len(source_objects)
+    total_bytes = sum(source.size for source in source_objects.values())
     completed_files = 0
     remaining_by_source = {relative: sum(1 for item in plan["items"] if item["source_relative_path"] == relative) for relative in source_objects}
+    setup_ms = _elapsed_ms(setup_started)
 
-    def emit_progress(phase: str, active: list[str], *, completed: int | None = None) -> None:
+    def emit_progress(phase_name: str, active: list[str], *, completed: int | None = None) -> None:
         if progress is not None:
             progress({
-                "phase": phase,
+                "phase": phase_name,
                 "completed": completed_files if completed is None else completed,
                 "total": total_files,
                 "active": active,
@@ -347,7 +390,9 @@ def execute_plan(
             completed_files += 1
         emit_progress("importing", [relative] if remaining_by_source[relative] else [])
 
+    transaction_started = time.perf_counter()
     transaction = create_staging_directory(project_root / "00_Admin", ".jl-managed-import-")
+    transaction_setup_ms = _elapsed_ms(transaction_started)
     stage = transaction / "stage"
     backups = transaction / "backups"
     writes = transaction / "writes"
@@ -356,13 +401,29 @@ def execute_plan(
     changed_original = False
     changed_audio = False
     try:
+        phase = "staging"
+        phase_started = time.perf_counter()
         staged: dict[str, Path] = {}
         staged_files = 0
         for relative, source in source_objects.items():
             emit_progress("staging", [relative], completed=staged_files)
+            file_started = time.perf_counter()
             staged[relative] = _stage_source(source, stage)
+            file_ms = _elapsed_ms(file_started)
+            staged_bytes += source.size
+            diagnostic_log.debug(
+                "managed_import_stage_file_profile",
+                relative_path=relative,
+                size_bytes=source.size,
+                zip_member=source.zip_member is not None,
+                elapsed_ms=file_ms,
+            )
             staged_files += 1
             emit_progress("staging", [relative], completed=staged_files)
+        staging_ms = _elapsed_ms(phase_started)
+
+        phase = "importing"
+        phase_started = time.perf_counter()
         emit_progress("importing", [])
         item_by_id = {item["id"]: item for item in plan["items"]}
         for position, item in enumerate(plan["items"]):
@@ -377,15 +438,18 @@ def execute_plan(
                 results.append({"id": item["id"], "result": "skipped"})
                 complete_item(item)
                 continue
+            item_started = time.perf_counter()
             destination = _managed_destination(project_root, item["destination_relative_path"])
             if _file_state(destination) != item["destination_state"]:
                 raise ValidationError(f"Managed destination changed after planning: {item['destination_relative_path']}")
             destination.parent.mkdir(parents=True, exist_ok=True)
             backup: Path | None = None
+            backup_started = time.perf_counter()
             if destination.exists():
                 backup = backups / Path(item["destination_relative_path"])
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 os.replace(destination, backup)
+            backup_ms = _elapsed_ms(backup_started)
             applied.append((destination, backup))
             if item["area"] == "audio_prep" and dependency:
                 original_item = item_by_id[dependency]
@@ -395,16 +459,42 @@ def execute_plan(
                 copy_source = staged[item["source_relative_path"]]
             writes.mkdir(parents=True, exist_ok=True)
             temp_dest = writes / f"write-{position}.tmp"
+            copy_started = time.perf_counter()
             shutil.copyfile(copy_source, temp_dest)
+            copy_ms = _elapsed_ms(copy_started)
+            replace_started = time.perf_counter()
             os.replace(temp_dest, destination)
+            replace_ms = _elapsed_ms(replace_started)
+            written_bytes += int(item.get("size_bytes", 0))
             changed_original = changed_original or item["area"] == "original_delivery"
             changed_audio = changed_audio or item["area"] == "audio_prep"
-            results.append({"id": item["id"], "result": "replaced" if backup else "created"})
+            result_name = "replaced" if backup else "created"
+            results.append({"id": item["id"], "result": result_name})
+            diagnostic_log.debug(
+                "managed_import_write_item_profile",
+                relative_path=relative,
+                area=item["area"],
+                size_bytes=int(item.get("size_bytes", 0)),
+                result=result_name,
+                backup_ms=backup_ms,
+                copy_ms=copy_ms,
+                replace_ms=replace_ms,
+                total_ms=_elapsed_ms(item_started),
+            )
             complete_item(item)
+        importing_ms = _elapsed_ms(phase_started)
+
+        phase = "invalidation"
+        phase_started = time.perf_counter()
         invalidated = _invalidate(project_root, changed_original, changed_audio)
+        invalidation_ms = _elapsed_ms(phase_started)
         emit_progress("complete", [])
+        success = True
+        phase = "complete"
         return {"items": results, "invalidations": invalidated}
     except Exception:
+        phase = "rollback"
+        rollback_started = time.perf_counter()
         for destination, backup in reversed(applied):
             try:
                 if destination.exists() and not destination.is_symlink():
@@ -414,6 +504,35 @@ def execute_plan(
                     os.replace(backup, destination)
             except OSError:
                 pass
+        rollback_ms = _elapsed_ms(rollback_started)
         raise
     finally:
+        cleanup_started = time.perf_counter()
         shutil.rmtree(transaction, ignore_errors=True)
+        cleanup_ms = _elapsed_ms(cleanup_started)
+        result_counts = {
+            "created": sum(1 for item in results if item["result"] == "created"),
+            "replaced": sum(1 for item in results if item["result"] == "replaced"),
+            "skipped": sum(1 for item in results if item["result"] == "skipped"),
+        }
+        diagnostic_log.info(
+            "managed_import_execute_profile",
+            success=success,
+            final_phase=phase,
+            file_count=total_files,
+            total_bytes=total_bytes,
+            item_count=len(plan["items"]),
+            staged_bytes=staged_bytes,
+            written_bytes=written_bytes,
+            created_count=result_counts["created"],
+            replaced_count=result_counts["replaced"],
+            skipped_count=result_counts["skipped"],
+            setup_ms=setup_ms,
+            transaction_setup_ms=transaction_setup_ms,
+            staging_ms=staging_ms,
+            importing_ms=importing_ms,
+            invalidation_ms=invalidation_ms,
+            rollback_ms=rollback_ms,
+            cleanup_ms=cleanup_ms,
+            total_ms=_elapsed_ms(total_started),
+        )

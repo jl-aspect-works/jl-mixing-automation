@@ -10,6 +10,27 @@ JL Mixing Automation writes structured JSON Lines diagnostics to a per-user log 
 
 Set `JL_MIXING_LOG_DIR` to override the directory. Set `JL_MIXING_LOG_LEVEL=debug` for detailed progress events; the default level is `info`.
 
+## Managed Client Files import profiling
+
+Managed Client Files imports record concise timing summaries at the default `info` level:
+
+- `managed_import_plan_profile` measures source collection, destination/conflict checks, plan finalization, file/byte counts, and total lower-level planning time.
+- `managed_import_provenance_plan_profile` measures provenance-wrapper planning, including base planning, provenance loading, destination resolution/fallback matching, and total wrapper time.
+- `managed_import_working_hash_index_profile` measures Working_Audio content-index hashing when fallback/recovery matching requires it.
+- `managed_import_execute_profile` measures setup, transaction creation, staging, destination writes, cache invalidation, rollback/cleanup, file/byte counts, result counts, and total lower-level execution time.
+- `managed_import_provenance_finalize_profile` measures post-copy lineage recording, including source/working SHA-256 work and provenance-file writing.
+- `managed_import_provenance_execute_profile` measures lower-level execute time versus lineage finalization and total wrapper execution time.
+
+For per-file detail, run Studio or Automation with `JL_MIXING_LOG_LEVEL=debug`. Debug logging adds:
+
+- `managed_import_stage_file_profile` for each staged source file.
+- `managed_import_write_item_profile` for each Original Delivery or Audio Prep write, including copy and replace timing.
+- `managed_import_fallback_hash_profile` for each fallback source hash used during provenance resolution.
+- `managed_import_working_hash_file_profile` for each Working_Audio file hashed into the recovery index.
+- `managed_import_provenance_hash_file_profile` for the Original Delivery and Working_Audio hashes recorded after a successful import.
+
+These events are diagnostic only. They do not change the Automation API response or stderr progress stream.
+
 ## Retention
 
 The active file rotates at 5 MB. One rotated backup is retained as `automation.jsonl.1`, bounding normal disk use to roughly 10 MB.
