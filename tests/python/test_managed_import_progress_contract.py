@@ -24,7 +24,7 @@ def progress_events(stderr: str) -> list[dict[str, object]]:
 
 
 class ManagedImportProgressContractTests(unittest.TestCase):
-    def test_adapter_uses_engine_staging_counts_and_stays_monotonic(self) -> None:
+    def test_adapter_uses_engine_counts_and_reserves_completion_for_true_end(self) -> None:
         output = io.StringIO()
         adapter = api._ImportProgressAdapter("client.files.import.execute", 2)
 
@@ -36,6 +36,8 @@ class ManagedImportProgressContractTests(unittest.TestCase):
             adapter({"phase": "importing", "completed": 0, "total": 2, "active": []})
             adapter({"phase": "importing", "completed": 1, "total": 2, "active": ["one.wav"]})
             adapter({"phase": "importing", "completed": 2, "total": 2, "active": []})
+            adapter({"phase": "finalizing", "completed": 1, "total": 2, "active": ["one.wav"]})
+            adapter({"phase": "finalizing", "completed": 2, "total": 2, "active": ["two.wav"]})
             adapter({"phase": "complete", "completed": 2, "total": 2, "active": []})
             adapter.finish()
 
@@ -44,15 +46,17 @@ class ManagedImportProgressContractTests(unittest.TestCase):
         self.assertEqual(phases[-2:], ["finalizing", "complete"])
         staging = [int(event["completed"]) for event in events if event["phase"] == "staging"]
         self.assertEqual(staging, [0, 1, 1, 2])
+        finalizing = [int(event["completed"]) for event in events if event["phase"] == "finalizing"]
+        self.assertEqual(finalizing, [1, 2])
         overall = [int(event["overall_completed"]) for event in events]
         self.assertEqual(overall, sorted(overall))
-        self.assertTrue(all(event["overall_total"] == 5 for event in events))
-        self.assertTrue(all(value < 5 for value in overall[:-1]))
-        self.assertEqual(overall[-1], 5)
+        self.assertTrue(all(event["overall_total"] == 6 for event in events))
+        self.assertTrue(all(value < 6 for value in overall[:-1]))
+        self.assertEqual(overall[-1], 6)
         self.assertEqual(events[-1]["completed"], 2)
         self.assertEqual(events[-1]["total"], 2)
 
-    def test_execute_import_emits_planning_before_replanning_and_complete_last(self) -> None:
+    def test_execute_import_emits_determinate_replan_before_copy_and_complete_last(self) -> None:
         request = api.ImportRequest(
             project=Path("/project"),
             source_kind="files",
@@ -67,11 +71,14 @@ class ManagedImportProgressContractTests(unittest.TestCase):
         }
         output = io.StringIO()
 
-        def fake_plan_import(*_args):
+        def fake_plan_import(*_args, progress=None):
             events = progress_events(output.getvalue())
             self.assertEqual(events[0]["phase"], "planning")
             self.assertIsNone(events[0]["total"])
             self.assertIsNone(events[0]["overall_total"])
+            assert progress is not None
+            progress({"phase": "planning", "completed": 1, "total": 2, "active": ["one.wav"]})
+            progress({"phase": "planning", "completed": 2, "total": 2, "active": ["one.wav"]})
             return plan
 
         def fake_execute_plan(_root, _plan, _decisions, *, progress=None):
@@ -79,6 +86,7 @@ class ManagedImportProgressContractTests(unittest.TestCase):
             progress({"phase": "staging", "completed": 0, "total": 1, "active": ["one.wav"]})
             progress({"phase": "staging", "completed": 1, "total": 1, "active": ["one.wav"]})
             progress({"phase": "importing", "completed": 1, "total": 1, "active": []})
+            progress({"phase": "finalizing", "completed": 1, "total": 1, "active": ["one.wav"]})
             progress({"phase": "complete", "completed": 1, "total": 1, "active": []})
             return {"items": []}
 
@@ -94,10 +102,27 @@ class ManagedImportProgressContractTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(payload["status"], "success")
         events = progress_events(output.getvalue())
-        self.assertEqual(events[0]["phase"], "planning")
+        planning = [event for event in events if event["phase"] == "planning"]
+        self.assertEqual([event["completed"] for event in planning[-2:]], [1, 2])
+        self.assertEqual([event["total"] for event in planning[-2:]], [2, 2])
         self.assertEqual(events[-2]["phase"], "finalizing")
         self.assertEqual(events[-1]["phase"], "complete")
         self.assertEqual(events[-1]["overall_completed"], events[-1]["overall_total"])
+
+    def test_import_plan_accepts_progress_mode(self) -> None:
+        parsed = api.parse_import_args(
+            [
+                "--project",
+                "/project",
+                "--source-kind",
+                "files",
+                "--source",
+                "/source/one.wav",
+                "--progress=stderr-json",
+            ],
+            execute=False,
+        )
+        self.assertEqual(parsed.progress, "stderr-json")
 
     def test_failed_import_never_emits_complete(self) -> None:
         request = api.ImportRequest(
