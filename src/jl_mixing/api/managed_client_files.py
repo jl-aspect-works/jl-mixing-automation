@@ -68,7 +68,7 @@ class _ImportProgressAdapter:
     def __init__(self, operation: str, total_files: int):
         self.operation = operation
         self.total_files = total_files
-        self.overall_total = total_files * 2 + 1
+        self.overall_total = total_files * 3
         self.staging_complete_emitted = False
         self.finalizing_emitted = False
 
@@ -106,10 +106,15 @@ class _ImportProgressAdapter:
             self._emit("importing", completed, active, self.total_files + completed)
             return
 
+        if phase == "finalizing":
+            self._finish_staging()
+            overall_completed = min(self.total_files * 2 + completed, self.overall_total - 1)
+            self._emit("finalizing", completed, active, overall_completed)
+            self.finalizing_emitted = completed >= self.total_files
+            return
+
         if phase == "complete":
             self._finish_staging()
-            self._emit("finalizing", self.total_files, [], self.total_files * 2)
-            self.finalizing_emitted = True
             return
 
         _emit_progress(self.operation, event)
@@ -117,8 +122,7 @@ class _ImportProgressAdapter:
     def finish(self) -> None:
         self._finish_staging()
         if not self.finalizing_emitted:
-            self._emit("finalizing", self.total_files, [], self.total_files * 2)
-            self.finalizing_emitted = True
+            self._emit("finalizing", 0, [], self.total_files * 2)
         self._emit("complete", self.total_files, [], self.overall_total)
 
 
@@ -145,7 +149,8 @@ def execute_import_plan(request: ImportRequest) -> tuple[dict[str, Any], int]:
     log_info("operation_start", operation=operation, source_kind=request.source_kind, source_count=len(request.sources))
     try:
         root = resolve_project(request.project, Path.cwd())
-        plan = plan_import(root, request.source_kind, request.sources)
+        progress_enabled = request.progress == _PROGRESS_MODE
+        plan = plan_import(root, request.source_kind, request.sources, progress=(lambda event: _emit_progress(operation, {**event, "overall_completed": event.get("completed"), "overall_total": event.get("total")})) if progress_enabled else None)
         log_info("operation_complete", operation=operation, duration_ms=int((time.monotonic() - started) * 1000), file_count=len(plan.get("files", [])))
         return _envelope(operation, "planned", {"project": _project_data(root), "plan": plan}), 0
     except ContextError as exc: return _error(operation, "PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
@@ -187,7 +192,7 @@ def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
                 },
             )
         plan_started = time.monotonic()
-        full_plan = plan_import(root, request.source_kind, request.sources)
+        full_plan = plan_import(root, request.source_kind, request.sources, progress=(lambda event: _emit_progress(operation, {**event, "overall_completed": event.get("completed"), "overall_total": event.get("total")})) if progress_enabled else None)
         log_info(
             "import_replan_complete",
             operation=operation,
@@ -271,12 +276,10 @@ def parse_import_args(args: list[str], *, execute: bool) -> ImportRequest:
         if arg == "--json": json_seen += 1
         elif arg.startswith("--progress="):
             value = arg.split("=", 1)[1]
-            if not execute:
-                raise ArgumentError("import-plan does not accept --progress.")
             if value != _PROGRESS_MODE:
                 raise ArgumentError(f"Unsupported managed import progress mode: {value}. Expected {_PROGRESS_MODE}.")
             if progress is not None:
-                raise ArgumentError("import-execute accepts at most one --progress option.")
+                raise ArgumentError("managed import accepts at most one --progress option.")
             progress = value
         elif arg in {"--project", "--source-kind", "--source", "--plan-id", "--decisions-json", "--include-relative-path"}:
             index += 1
