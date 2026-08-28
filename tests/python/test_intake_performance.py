@@ -149,13 +149,16 @@ class IntakePerformanceTests(unittest.TestCase):
             payload = json.loads(proc.stdout)
             self.assertEqual(payload["operation"], "intake.validate")
             progress_lines = [line for line in proc.stderr.splitlines() if line.startswith("JL_PROGRESS ")]
-            self.assertGreaterEqual(len(progress_lines), 3)
+            self.assertGreaterEqual(len(progress_lines), 5)
             events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in progress_lines]
             self.assertTrue(all(event["operation"] == "intake.validate" for event in events))
             self.assertEqual(events[0]["phase"], "scanning")
-            self.assertEqual(events[-1]["phase"], "finalizing")
-            self.assertEqual(events[-1]["completed"], 1)
-            self.assertEqual(events[-1]["total"], 1)
+            finalizing = [event for event in events if event["phase"] == "finalizing"]
+            self.assertEqual([event["completed"] for event in finalizing], [0, 1, 2])
+            self.assertTrue(all(event["total"] == 3 for event in finalizing))
+            self.assertEqual(events[-1]["phase"], "complete")
+            self.assertEqual(events[-1]["completed"], 3)
+            self.assertEqual(events[-1]["total"], 3)
 
 
 if __name__ == "__main__":
