@@ -59,10 +59,68 @@ from .system_info import document as system_info_document
 
 EXIT_ARGUMENTS = 2
 EXIT_CONFIG = 3
+_STDIN_REQUEST_FLAG = "--request-stdin"
 
 
 def _emit_json(payload: dict[str, object]) -> None:
     print(json.dumps(payload, separators=(",", ":"), sort_keys=True))
+
+
+def _string_list(payload: dict[str, object], key: str) -> list[str]:
+    value = payload.get(key)
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ArgumentError(f"stdin request field {key} must be an array of strings.")
+    return value
+
+
+def _string_map(payload: dict[str, object], key: str) -> dict[str, str] | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
+        raise ArgumentError(f"stdin request field {key} must be an object mapping strings to strings.")
+    return value
+
+
+def _expand_managed_stdin(args: list[str]) -> list[str]:
+    if _STDIN_REQUEST_FLAG not in args:
+        return args
+    if args.count(_STDIN_REQUEST_FLAG) != 1:
+        raise ArgumentError("managed operation accepts at most one --request-stdin option.")
+    if len(args) < 2:
+        raise ArgumentError("--request-stdin requires a managed operation.")
+    command = tuple(args[:2])
+    supported = {
+        ("client-files", "import-plan"),
+        ("client-files", "import-execute"),
+        ("audio-prep", "reset-plan"),
+        ("audio-prep", "reset-execute"),
+    }
+    if command not in supported:
+        raise ArgumentError("--request-stdin is only supported for managed import and Audio Prep reset operations.")
+    try:
+        payload = json.loads(sys.stdin.read())
+    except json.JSONDecodeError as exc:
+        raise ArgumentError("--request-stdin requires valid JSON on stdin.") from exc
+    if not isinstance(payload, dict):
+        raise ArgumentError("--request-stdin requires a JSON object on stdin.")
+
+    expanded = [arg for arg in args if arg != _STDIN_REQUEST_FLAG]
+    if command[0] == "client-files":
+        for source in _string_list(payload, "sources"):
+            expanded.extend(["--source", source])
+        for relative_path in _string_list(payload, "selected_relative_paths"):
+            expanded.extend(["--include-relative-path", relative_path])
+    else:
+        for relative_path in _string_list(payload, "relative_paths"):
+            expanded.extend(["--relative-path", relative_path])
+
+    decisions = _string_map(payload, "decisions")
+    if decisions is not None:
+        expanded.extend(["--decisions-json", json.dumps(decisions, separators=(",", ":"), sort_keys=True)])
+    return expanded
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -103,28 +161,36 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if len(args) >= 2 and args[0:2] == ["client-files", "import-plan"]:
         operation = "client.files.import.plan"
-        try: request = parse_managed_import_args(args[2:], execute=False)
+        try:
+            expanded = _expand_managed_stdin(args)
+            request = parse_managed_import_args(expanded[2:], execute=False)
         except ArgumentError as exc:
             _emit_json(managed_files_error(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
         payload, status = managed_import_plan_execute(request); _emit_json(payload); return status
 
     if len(args) >= 2 and args[0:2] == ["client-files", "import-execute"]:
         operation = "client.files.import.execute"
-        try: request = parse_managed_import_args(args[2:], execute=True)
+        try:
+            expanded = _expand_managed_stdin(args)
+            request = parse_managed_import_args(expanded[2:], execute=True)
         except ArgumentError as exc:
             _emit_json(managed_files_error(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
         payload, status = managed_import_execute(request); _emit_json(payload); return status
 
     if len(args) >= 2 and args[0:2] == ["audio-prep", "reset-plan"]:
         operation = "audio.prep.reset.plan"
-        try: request = parse_managed_reset_args(args[2:], execute=False)
+        try:
+            expanded = _expand_managed_stdin(args)
+            request = parse_managed_reset_args(expanded[2:], execute=False)
         except ArgumentError as exc:
             _emit_json(managed_files_error(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
         payload, status = managed_reset_plan_execute(request); _emit_json(payload); return status
 
     if len(args) >= 2 and args[0:2] == ["audio-prep", "reset-execute"]:
         operation = "audio.prep.reset.execute"
-        try: request = parse_managed_reset_args(args[2:], execute=True)
+        try:
+            expanded = _expand_managed_stdin(args)
+            request = parse_managed_reset_args(expanded[2:], execute=True)
         except ArgumentError as exc:
             _emit_json(managed_files_error(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
         payload, status = managed_reset_execute(request); _emit_json(payload); return status
