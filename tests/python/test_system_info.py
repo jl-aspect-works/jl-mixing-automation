@@ -27,8 +27,8 @@ class SystemInfoTests(unittest.TestCase):
             "client.files.import.execute", "client.files.import.plan", "client.files.import.progress", "delivery.create",
             "delivery.package.delete", "delivery.package.rebuild", "delivery.status", "intake.validate",
             "intake.validate.incremental", "intake.validate.progress", "intake.validate.report",
-            "intake.validate.structured", "project.create", "project.create.artist", "project.update",
-            "revision.approve", "revision.close", "revision.create", "revision.create.description",
+            "intake.validate.structured", "managed.requests.stdin-json", "project.create", "project.create.artist",
+            "project.update", "revision.approve", "revision.close", "revision.create", "revision.create.description",
             "revision.reopen", "revision.unapprove", "revision.update.description", "studio.update", "system.info",
         ])
         self.assertEqual(Path(info["schemas"]["installed_path"]), (ROOT / "api" / "schemas" / "v1.0").resolve())
