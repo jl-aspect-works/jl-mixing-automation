@@ -24,7 +24,7 @@ _CAPABILITIES = [
     "intake.validate.progress",
     "intake.validate.report",
     "intake.validate.structured",
-    "managed.requests.stdin-json",
+    "managed.requests.stdinjson",
     "project.create",
     "project.create.artist",
     "project.update",
