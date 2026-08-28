@@ -27,6 +27,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git rm tools/apply_issue_184_temp.py .github/workflows/apply-184-clean.yml
-          git add src/jl_mixing
+          git add src/jl_mixing tests/python/test_managed_import_progress_contract.py
           git commit -m 'Optimize NAS import metadata and progress'
           git push origin HEAD:perf/184-nas-import-progress-v2
+# rerun after progress contract test update
