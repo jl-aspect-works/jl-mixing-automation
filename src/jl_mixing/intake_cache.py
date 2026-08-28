@@ -12,9 +12,10 @@ CACHE_SCHEMA_VERSION = 1
 _FINGERPRINT_CHUNK_SIZE = 64 * 1024
 
 
-def content_fingerprint(path: Path) -> str:
+def content_fingerprint(path: Path, *, size: int | None = None) -> str:
     """Return a cheap content fingerprint that is stronger than metadata alone."""
-    size = path.stat().st_size
+    if size is None:
+        size = path.stat().st_size
     digest = hashlib.sha256()
     digest.update(str(size).encode("ascii"))
     with path.open("rb") as handle:
@@ -60,7 +61,7 @@ def reusable_cache_record(
     if record.get("size_bytes") != stat.st_size or record.get("modified_ns") != stat.st_mtime_ns:
         return None
     try:
-        fingerprint = content_fingerprint(path)
+        fingerprint = content_fingerprint(path, size=stat.st_size)
     except OSError:
         return None
     if record.get("fingerprint") != fingerprint:
@@ -73,7 +74,7 @@ def cache_identity(path: Path) -> dict[str, Any]:
     return {
         "size_bytes": stat.st_size,
         "modified_ns": stat.st_mtime_ns,
-        "fingerprint": content_fingerprint(path),
+        "fingerprint": content_fingerprint(path, size=stat.st_size),
     }
 
 
