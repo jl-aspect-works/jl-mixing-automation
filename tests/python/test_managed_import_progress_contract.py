@@ -112,6 +112,7 @@ class ManagedImportProgressContractTests(unittest.TestCase):
     def test_import_plan_accepts_progress_mode(self) -> None:
         parsed = api.parse_import_args(
             [
+                "--json",
                 "--project",
                 "/project",
                 "--source-kind",
