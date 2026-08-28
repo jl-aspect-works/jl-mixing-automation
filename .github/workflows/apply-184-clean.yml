@@ -16,7 +16,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply focused edits
-        run: python tools/apply_issue_184_temp.py
+        run: |
+          python tools/apply_issue_184_temp.py
+          python tools/apply_issue_184_fix_temp.py
       - name: Compile and focused tests
         run: |
           python -m compileall -q src/jl_mixing
@@ -26,8 +28,8 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm tools/apply_issue_184_temp.py .github/workflows/apply-184-clean.yml
+          git rm tools/apply_issue_184_temp.py tools/apply_issue_184_fix_temp.py .github/workflows/apply-184-clean.yml
           git add src/jl_mixing tests/python/test_managed_import_progress_contract.py
           git commit -m 'Optimize NAS import metadata and progress'
           git push origin HEAD:perf/184-nas-import-progress-v2
-# rerun after progress contract test update
+# rerun after finalizing progress guard
