@@ -187,9 +187,49 @@ def _collect_files(source_kind: str, sources: tuple[Path, ...]) -> list[SourceFi
     return files
 
 
-def _item(project_root: Path, item_id: str, area: str, relative: str, source: SourceFile, *, depends_on: str | None = None) -> dict[str, Any]:
-    destination = _managed_destination(project_root, relative)
-    state = _file_state(destination)
+def _plan_file_state(project_root: Path, relative: str, validated_parents: set[Path]) -> str:
+    """Inspect a planned destination with one metadata call per unique parent/file."""
+    safe = _safe_relative(relative)
+    destination = project_root / Path(safe)
+    current = project_root
+    for part in Path(safe).parts[:-1]:
+        current = current / part
+        if current in validated_parents:
+            continue
+        try:
+            info = current.stat(follow_symlinks=False)
+        except FileNotFoundError:
+            validated_parents.add(current)
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            raise UnsafeOperationError(f"Managed destination traverses a symlink: {current}")
+        if not stat.S_ISDIR(info.st_mode):
+            raise UnsafeOperationError(f"Managed destination parent is not a directory: {current}")
+        validated_parents.add(current)
+    try:
+        info = destination.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        return "missing"
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        raise UnsafeOperationError(f"Managed destination is not a regular file: {destination}")
+    return f"file:{info.st_size}:{info.st_mtime_ns}"
+
+
+def _item(
+    project_root: Path,
+    item_id: str,
+    area: str,
+    relative: str,
+    source: SourceFile,
+    *,
+    depends_on: str | None = None,
+    validated_parents: set[Path] | None = None,
+) -> dict[str, Any]:
+    state = (
+        _plan_file_state(project_root, relative, validated_parents)
+        if validated_parents is not None
+        else _file_state(_managed_destination(project_root, relative))
+    )
     conflict = state != "missing"
     result: dict[str, Any] = {
         "id": item_id,
@@ -228,7 +268,13 @@ def _serialized_source(source: SourceFile) -> dict[str, Any]:
     }
 
 
-def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...]) -> dict[str, Any]:
+def plan_import(
+    project_root: Path,
+    source_kind: str,
+    sources: tuple[Path, ...],
+    *,
+    progress: ProgressCallback | None = None,
+) -> dict[str, Any]:
     total_started = time.perf_counter()
     collect_started = time.perf_counter()
     files = _collect_files(source_kind, sources)
@@ -236,12 +282,16 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
 
     items_started = time.perf_counter()
     items: list[dict[str, Any]] = []
+    validated_parents: set[Path] = set()
+    total_files = len(files)
     for index, source in enumerate(files):
         original_rel = (ORIGINAL_ROOT / Path(source.relative_path)).as_posix()
         audio_rel = (AUDIO_ROOT / Path(source.relative_path)).as_posix()
         original_id = f"original:{index}"
-        items.append(_item(project_root, original_id, "original_delivery", original_rel, source))
-        items.append(_item(project_root, f"audio:{index}", "audio_prep", audio_rel, source, depends_on=original_id))
+        items.append(_item(project_root, original_id, "original_delivery", original_rel, source, validated_parents=validated_parents))
+        items.append(_item(project_root, f"audio:{index}", "audio_prep", audio_rel, source, depends_on=original_id, validated_parents=validated_parents))
+        if progress is not None:
+            progress({"phase": "planning", "completed": index + 1, "total": total_files, "active": [source.relative_path]})
     items_ms = _elapsed_ms(items_started)
 
     finalize_started = time.perf_counter()

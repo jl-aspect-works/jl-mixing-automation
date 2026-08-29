@@ -187,10 +187,22 @@ def _resolved_destination(project_root: Path, source_relative: str, fallback_sou
     return _lineage_destination(project_root, source_relative, provenance, working_index) or _fallback_match(source_relative, fallback_source, working_index)
 
 
-def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...]) -> dict[str, Any]:
+def plan_import(
+    project_root: Path,
+    source_kind: str,
+    sources: tuple[Path, ...],
+    *,
+    progress: base.ProgressCallback | None = None,
+) -> dict[str, Any]:
     total_started = time.perf_counter()
     base_started = time.perf_counter()
-    plan = base.plan_import(project_root, source_kind, sources)
+    base_progress = None
+    if progress is not None:
+        def base_progress(event: dict[str, Any]) -> None:
+            completed = int(event.get("completed", 0))
+            total = int(event.get("total", 0))
+            progress({**event, "completed": completed, "total": total * 2})
+    plan = base.plan_import(project_root, source_kind, sources, progress=base_progress)
     base_plan_ms = _elapsed_ms(base_started)
 
     provenance_started = time.perf_counter()
@@ -201,6 +213,8 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
     resolution_started = time.perf_counter()
     working_index = _WorkingHashIndex(project_root)
     items: list[dict[str, Any]] = []
+    resolved_count = 0
+    total_sources = len(source_objects)
     for item in plan["items"]:
         if item["area"] != "audio_prep":
             items.append(item)
@@ -214,6 +228,9 @@ def plan_import(project_root: Path, source_kind: str, sources: tuple[Path, ...])
             items.append(base._item(project_root, item["id"], "audio_prep", destination, source, depends_on=item.get("depends_on")))
         else:
             items.append(item)
+        resolved_count += 1
+        if progress is not None:
+            progress({"phase": "planning", "completed": total_sources + resolved_count, "total": total_sources * 2, "active": [source_relative]})
     resolution_ms = _elapsed_ms(resolution_started)
 
     finalize_started = time.perf_counter()
@@ -270,6 +287,8 @@ def _record_successful_lineage(
     plan: dict[str, Any],
     result: dict[str, Any],
     content_hashes: dict[str, str] | None = None,
+    *,
+    progress: base.ProgressCallback | None = None,
 ) -> None:
     total_started = time.perf_counter()
     statuses = {item["id"]: item["result"] for item in result.get("items", [])}
@@ -284,18 +303,22 @@ def _record_successful_lineage(
     reused_hash_count = 0
     reused_hash_bytes = 0
     recorded_count = 0
-    for item in plan["items"]:
-        if item["area"] != "audio_prep" or statuses.get(item["id"]) not in {"created", "replaced"}:
-            continue
+    eligible_items = [item for item in plan["items"] if item["area"] == "audio_prep" and statuses.get(item["id"]) in {"created", "replaced"}]
+    total_eligible = len(eligible_items)
+    for item in eligible_items:
         source_relative = base._safe_relative(item["source_relative_path"])
         working_relative = base._safe_relative(item["destination_relative_path"])
-        source_path = base._managed_destination(project_root, (base.ORIGINAL_ROOT / Path(source_relative)).as_posix())
-        working_path = base._managed_destination(project_root, working_relative)
-        if not source_path.is_file() or not working_path.is_file():
-            continue
-        source_size = source_path.stat().st_size
-        working_size = working_path.stat().st_size
         reusable_hash = content_hashes.get(source_relative) if content_hashes is not None else None
+        if reusable_hash:
+            source_size = int(item["size_bytes"])
+            working_size = source_size
+        else:
+            source_path = base._managed_destination(project_root, (base.ORIGINAL_ROOT / Path(source_relative)).as_posix())
+            working_path = base._managed_destination(project_root, working_relative)
+            if not source_path.is_file() or not working_path.is_file():
+                continue
+            source_size = source_path.stat().st_size
+            working_size = working_path.stat().st_size
         if reusable_hash:
             source_hash = reusable_hash
             working_hash = reusable_hash
@@ -334,6 +357,8 @@ def _record_successful_lineage(
         })
         recorded_count += 1
         changed = True
+        if progress is not None:
+            progress({"phase": "finalizing", "completed": recorded_count, "total": total_eligible, "active": [source_relative]})
     write_ms = 0.0
     if changed:
         entries.sort(key=lambda entry: str(entry["source_relative_path"]).casefold())
@@ -365,11 +390,18 @@ def execute_plan(
     total_started = time.perf_counter()
     base_started = time.perf_counter()
     content_hashes: dict[str, str] = {}
-    result = base.execute_plan(project_root, plan, decisions, progress=progress, content_hashes=content_hashes)
+    def base_progress(event: dict[str, Any]) -> None:
+        if progress is not None and event.get("phase") != "complete":
+            progress(event)
+
+    result = base.execute_plan(project_root, plan, decisions, progress=base_progress if progress is not None else None, content_hashes=content_hashes)
     base_execute_ms = _elapsed_ms(base_started)
     lineage_started = time.perf_counter()
-    _record_successful_lineage(project_root, plan, result, content_hashes)
+    _record_successful_lineage(project_root, plan, result, content_hashes, progress=progress)
     lineage_ms = _elapsed_ms(lineage_started)
+    if progress is not None:
+        total_files = len(plan.get("files", []))
+        progress({"phase": "complete", "completed": total_files, "total": total_files, "active": []})
     diagnostic_log.info(
         "managed_import_provenance_execute_profile",
         base_execute_ms=base_execute_ms,

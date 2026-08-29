@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .. import diagnostic_log
 from ..audio_prep_status import build_audio_prep_status
 from ..context import resolve_project
 from ..errors import ArgumentError, ContextError, JLMixingError, ValidationError
@@ -21,6 +23,7 @@ _END = "<!-- END AUTOMATED SECTION -->"
 _CACHE_NAME = "intake-validation-cache.json"
 _PROGRESS_PREFIX = "JL_PROGRESS "
 _PROGRESS_MODE = "stderr-json"
+_FINALIZING_STEPS = 3
 
 
 @dataclass(frozen=True)
@@ -74,7 +77,15 @@ def _emit_progress(event: dict[str, Any]) -> None:
     )
 
 
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000.0, 3)
+
+
 def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
+    total_started = time.perf_counter()
+    validation_ms = 0.0
+    audio_prep_ms = 0.0
+    report_ms = 0.0
     try:
         project = resolve_project(request.project, Path.cwd())
         manifest = _manifest(project)
@@ -91,7 +102,15 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
         source = (request.source or (project / "01_Client_Files" / "Original_Delivery")).resolve()
         report_path = project / "00_Admin" / "Intake_Report.md"
         cache_path = project / "00_Admin" / _CACHE_NAME
-        progress_callback = _emit_progress if request.progress == _PROGRESS_MODE else None
+        progress_enabled = request.progress == _PROGRESS_MODE
+
+        def validation_progress(event: dict[str, Any]) -> None:
+            # The low-level validator's `complete` means per-file validation is done,
+            # not that intake.validate is done. Reserve API completion for the real end.
+            if progress_enabled and event.get("phase") != "complete":
+                _emit_progress(event)
+
+        validation_started = time.perf_counter()
         result = validate_intake_incremental(
             source,
             expected_sample_rate=sample_rate,
@@ -100,15 +119,18 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
             duplicate_check=request.duplicate_check,
             cache_path=cache_path,
             update_cache=not request.dry_run,
-            progress=progress_callback,
+            progress=validation_progress if progress_enabled else None,
         )
-        if progress_callback is not None:
-            progress_callback({
+        validation_ms = _elapsed_ms(validation_started)
+
+        if progress_enabled:
+            _emit_progress({
                 "phase": "finalizing",
-                "completed": result.files_discovered,
-                "total": result.files_discovered,
-                "active": [],
+                "completed": 0,
+                "total": _FINALIZING_STEPS,
+                "active": ["Checking Audio Prep status"],
             })
+        audio_prep_started = time.perf_counter()
         audio_prep = build_audio_prep_status(
             project,
             original_files=result.files,
@@ -117,6 +139,16 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
             expected_format=expected_format,
             update_cache=not request.dry_run,
         )
+        audio_prep_ms = _elapsed_ms(audio_prep_started)
+
+        if progress_enabled:
+            _emit_progress({
+                "phase": "finalizing",
+                "completed": 1,
+                "total": _FINALIZING_STEPS,
+                "active": ["Updating intake report"],
+            })
+        report_started = time.perf_counter()
         if request.dry_run:
             report_markdown = result.report_markdown
         else:
@@ -125,6 +157,15 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
                 report_markdown = report_path.read_text(encoding="utf-8")
             except OSError as exc:
                 raise ValidationError(f"Intake report is unreadable after update: {report_path}") from exc
+        report_ms = _elapsed_ms(report_started)
+
+        if progress_enabled:
+            _emit_progress({
+                "phase": "finalizing",
+                "completed": 2,
+                "total": _FINALIZING_STEPS,
+                "active": ["Preparing validation result"],
+            })
 
         status = "planned" if request.dry_run and not result.blocked else "blocked" if result.blocked else "success"
         exit_code = 5 if result.blocked else 0
@@ -158,14 +199,32 @@ def execute(request: IntakeRequest) -> tuple[dict[str, Any], int]:
                 "details": {"exit_code": 5, "blocking_errors": result.blocking_errors},
                 "retryable": False,
             })
-        return {
+        payload = {
             "api_version": api_version(),
             "operation": "intake.validate",
             "status": status,
             "data": data,
             "warnings": [],
             "errors": errors,
-        }, exit_code
+        }
+        if progress_enabled:
+            _emit_progress({
+                "phase": "complete",
+                "completed": _FINALIZING_STEPS,
+                "total": _FINALIZING_STEPS,
+                "active": [],
+            })
+        diagnostic_log.info(
+            "intake_validate_api_profile",
+            file_count=result.files_discovered,
+            files_validated=result.files_validated,
+            cache_reused=result.cache_reused,
+            validation_ms=validation_ms,
+            audio_prep_ms=audio_prep_ms,
+            report_ms=report_ms,
+            total_ms=_elapsed_ms(total_started),
+        )
+        return payload, exit_code
     except ContextError as exc:
         return _error_envelope("PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
     except ValidationError as exc:
