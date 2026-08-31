@@ -290,6 +290,7 @@ def create_project(request: ProjectCreateRequest) -> ProjectCreateResult:
             "02_Audio_Preparation/Rejected_Files",
             "03_DAW_Project",
             "04_Revisions/Revision_01",
+            "04_Revisions/Revision_01/Variants",
             "05_Final_Delivery/Stems",
             "06_Recall/External_Files",
             "06_Recall/Screenshots",

@@ -60,6 +60,11 @@ def make_project(root: Path) -> Path:
 
 
 class RevisionServiceTests(unittest.TestCase):
+    def test_project_creation_provisions_variants_for_initial_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = make_project(Path(tmp))
+            self.assertTrue((project / "04_Revisions" / "Revision_01" / "Variants").is_dir())
+
     def test_dry_run_plans_revision_two_without_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = make_project(Path(tmp))
@@ -74,12 +79,13 @@ class RevisionServiceTests(unittest.TestCase):
             self.assertFalse(result.revision_root.exists())
             self.assertEqual(manifest_path.read_text(encoding="utf-8"), before)
 
-    def test_create_revision_updates_manifest_and_notes(self) -> None:
+    def test_create_revision_updates_manifest_notes_and_variants_folder(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = make_project(Path(tmp))
             result = create_revision(RevisionCreateRequest(project, description="Vocal up 1 dB", change_directory=False))
             self.assertTrue(result.created)
             self.assertTrue((result.revision_root / "Revision_Notes.md").is_file())
+            self.assertTrue((result.revision_root / "Variants").is_dir())
             self.assertIn("Vocal up 1 dB", (result.revision_root / "Revision_Notes.md").read_text(encoding="utf-8"))
             persisted = json.loads((project / "00_Admin" / "project-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(persisted["state"]["current_revision"], 2)
@@ -113,6 +119,7 @@ class RevisionServiceTests(unittest.TestCase):
             result = create_revision(RevisionCreateRequest(project, source=source))
             self.assertEqual((result.revision_root / "Mix.wav").read_bytes(), b"mix")
             self.assertEqual((result.revision_root / "Instrumental.wav").read_bytes(), b"inst")
+            self.assertTrue((result.revision_root / "Variants").is_dir())
 
             nested = root / "nested"
             (nested / "folder").mkdir(parents=True)

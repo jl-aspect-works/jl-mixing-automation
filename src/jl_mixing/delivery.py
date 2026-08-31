@@ -261,28 +261,39 @@ def plan_delivery(
     selected: list[DeliverySelection] = []
     excluded: list[DeliveryExclusion] = []
 
+    def consider_file(item: Path) -> None:
+        if item.is_symlink():
+            raise ValidationError(f"Symbolic links are not allowed in a delivery source: {item}")
+        if not _regular_no_symlink(item):
+            raise ValidationError(f"Unsupported source item: {item}")
+        if working_prefix and item.name.startswith(working_prefix):
+            excluded.append(DeliveryExclusion(item.name, "working prefix"))
+            return
+        if include_patterns and not any(fnmatch.fnmatchcase(item.name, pattern) for pattern in include_patterns):
+            excluded.append(DeliveryExclusion(item.name, "include pattern"))
+            return
+        if exclude_patterns and any(fnmatch.fnmatchcase(item.name, pattern) for pattern in exclude_patterns):
+            excluded.append(DeliveryExclusion(item.name, "exclude pattern"))
+            return
+        kind = classify_deliverable(item.name)
+        relative = f"Stems/{item.name}" if kind == "stems" else item.name
+        selected.append(DeliverySelection(item, item.name, kind, relative))
+
     for item in sorted(revision_root.iterdir(), key=lambda path: (path.name.casefold(), path.name)):
         if item.name == "Revision_Notes.md":
             excluded.append(DeliveryExclusion(item.name, "revision notes"))
             continue
         if item.is_symlink():
             raise ValidationError(f"Symbolic links are not allowed in a delivery source: {item}")
+        if item.name == "Variants" and item.is_dir():
+            for variant in sorted(item.iterdir(), key=lambda path: (path.name.casefold(), path.name)):
+                if variant.is_dir() and not variant.is_symlink():
+                    raise ValidationError(f"Subdirectories are not allowed in revision Variants: {variant}")
+                consider_file(variant)
+            continue
         if item.is_dir():
             raise ValidationError(f"Subdirectories are not allowed in a delivery source: {item}")
-        if not _regular_no_symlink(item):
-            raise ValidationError(f"Unsupported source item: {item}")
-        if working_prefix and item.name.startswith(working_prefix):
-            excluded.append(DeliveryExclusion(item.name, "working prefix"))
-            continue
-        if include_patterns and not any(fnmatch.fnmatchcase(item.name, pattern) for pattern in include_patterns):
-            excluded.append(DeliveryExclusion(item.name, "include pattern"))
-            continue
-        if exclude_patterns and any(fnmatch.fnmatchcase(item.name, pattern) for pattern in exclude_patterns):
-            excluded.append(DeliveryExclusion(item.name, "exclude pattern"))
-            continue
-        kind = classify_deliverable(item.name)
-        relative = f"Stems/{item.name}" if kind == "stems" else item.name
-        selected.append(DeliverySelection(item, item.name, kind, relative))
+        consider_file(item)
 
     if not selected:
         raise ValidationError("No deliverable files were found after applying filters")
