@@ -220,6 +220,7 @@ def create_revision(request: RevisionCreateRequest) -> RevisionCreateResult:
         os.close(manifest_fd)
         if source_plan is not None:
             copy_from_plan(source_plan, stage)
+        (stage / "Variants").mkdir()
         (stage / "Revision_Notes.md").write_text(
             _render_notes(number, description), encoding="utf-8", newline="\n"
         )
