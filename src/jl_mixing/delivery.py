@@ -267,6 +267,9 @@ def plan_delivery(
             continue
         if item.is_symlink():
             raise ValidationError(f"Symbolic links are not allowed in a delivery source: {item}")
+        if item.name == "Variants" and item.is_dir():
+            excluded.append(DeliveryExclusion(item.name, "revision variants"))
+            continue
         if item.is_dir():
             raise ValidationError(f"Subdirectories are not allowed in a delivery source: {item}")
         if not _regular_no_symlink(item):
