@@ -76,9 +76,24 @@ class DeliveryServiceTests(unittest.TestCase):
             ])
             reasons = {item.name: item.reason for item in result.plan.excluded}
             self.assertEqual(reasons["Revision_Notes.md"], "revision notes")
+            self.assertEqual(reasons["Variants"], "revision variants")
             self.assertEqual(reasons["WORK rough.wav"], "working prefix")
             self.assertEqual(before_manifest, manifest_path.read_bytes())
             self.assertEqual(before_listing, sorted(path.relative_to(delivery).as_posix() for path in delivery.rglob("*")))
+
+    def test_variants_are_excluded_but_other_subdirectories_remain_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = write_project(Path(tmp))
+            revision = project / "04_Revisions" / "Revision_01"
+            (revision / "Variants" / "Delivery Song Instrumental Alt.wav").write_bytes(b"variant")
+            result = create_delivery(DeliveryCreateRequest(project, dry_run=True))
+            self.assertNotIn(
+                "Delivery Song Instrumental Alt.wav",
+                [record.name for record in result.plan.selected],
+            )
+            (revision / "Unexpected").mkdir()
+            with self.assertRaisesRegex(ValidationError, "Subdirectories are not allowed"):
+                create_delivery(DeliveryCreateRequest(project, dry_run=True))
 
     def test_create_copies_verifies_and_records_delivery(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
