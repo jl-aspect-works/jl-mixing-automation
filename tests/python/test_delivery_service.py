@@ -76,23 +76,35 @@ class DeliveryServiceTests(unittest.TestCase):
             ])
             reasons = {item.name: item.reason for item in result.plan.excluded}
             self.assertEqual(reasons["Revision_Notes.md"], "revision notes")
-            self.assertEqual(reasons["Variants"], "revision variants")
             self.assertEqual(reasons["WORK rough.wav"], "working prefix")
             self.assertEqual(before_manifest, manifest_path.read_bytes())
             self.assertEqual(before_listing, sorted(path.relative_to(delivery).as_posix() for path in delivery.rglob("*")))
 
-    def test_variants_are_excluded_but_other_subdirectories_remain_invalid(self) -> None:
+    def test_variants_are_included_but_other_subdirectories_remain_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = write_project(Path(tmp))
             revision = project / "04_Revisions" / "Revision_01"
-            (revision / "Variants" / "Delivery Song Instrumental Alt.wav").write_bytes(b"variant")
+            variant = revision / "Variants" / "Delivery Song TV Mix.wav"
+            variant.write_bytes(b"variant")
             result = create_delivery(DeliveryCreateRequest(project, dry_run=True))
-            self.assertNotIn(
-                "Delivery Song Instrumental Alt.wav",
+            self.assertIn(
+                "Delivery Song TV Mix.wav",
                 [record.name for record in result.plan.selected],
             )
+            selected = next(record for record in result.plan.selected if record.name == "Delivery Song TV Mix.wav")
+            self.assertEqual(selected.source, variant)
+            self.assertEqual(selected.path, "Delivery Song TV Mix.wav")
+            self.assertEqual(selected.deliverable_type, "tv_mix")
             (revision / "Unexpected").mkdir()
             with self.assertRaisesRegex(ValidationError, "Subdirectories are not allowed"):
+                create_delivery(DeliveryCreateRequest(project, dry_run=True))
+
+    def test_nested_variants_subdirectories_remain_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = write_project(Path(tmp))
+            revision = project / "04_Revisions" / "Revision_01"
+            (revision / "Variants" / "Nested").mkdir()
+            with self.assertRaisesRegex(ValidationError, "Subdirectories are not allowed in revision Variants"):
                 create_delivery(DeliveryCreateRequest(project, dry_run=True))
 
     def test_create_copies_verifies_and_records_delivery(self) -> None:
