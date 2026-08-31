@@ -8,6 +8,7 @@
 - [ ] Update `VERSION` to the intended SemVer value (for example `2.1.0-rc.3` or `2.1.0`).
 - [ ] Do not change tests or application code solely to advance the release number.
 - [ ] Update release notes only when release content or installation guidance actually changed; do not edit them solely to change an RC number.
+- [ ] Before a stable release, perform a final documentation-only pass: remove RC/prerelease wording from the release notes, describe completed qualification in past tense, and verify installation/version examples match the stable release.
 - [ ] Run `make release-check`.
 - [ ] Open the release-preparation PR.
 - [ ] Confirm ShellCheck and the complete Tests workflow are green before merge.
