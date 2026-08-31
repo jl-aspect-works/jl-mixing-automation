@@ -4,7 +4,7 @@ JL Mixing Automation 2.1 supplies the authoritative workflow capabilities used b
 
 ## Installation
 
-Download the release archive for your platform from the Assets section and verify its accompanying SHA-256 checksum before installing. Replace `<version>` below with the version shown on the release, for example `2.1.0-rc.3`.
+Download the release archive for your platform from the Assets section and verify its accompanying SHA-256 checksum before installing. Replace `<version>` below with the version shown on the release (for this stable release, `2.1.0`).
 
 ### macOS
 
@@ -97,6 +97,6 @@ Closing a revision is non-destructive; it does not delete the revision directory
 - Unrestricted managed-deliverable rename/delete operations.
 - Real-time multi-user conflict resolution.
 
-## Release-candidate validation
+## Release qualification
 
-Prerelease versions of 2.1 are intended for coordinated packaged validation with the corresponding JL Mixing Studio 2.1 candidate on Windows and macOS before promotion to the stable 2.1 release.
+Automation 2.1.0 was qualified through coordinated packaged acceptance with JL Mixing Studio 2.1 release candidates on Windows and macOS. The accepted candidate set exercised installation/runtime behavior and the Automation-owned workflows required by Studio 2.1 before promotion to the stable release.
