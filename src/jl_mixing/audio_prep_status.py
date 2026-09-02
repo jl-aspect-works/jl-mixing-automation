@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .intake_incremental import validate_intake_incremental
-from .os_metadata import is_ignored_os_metadata_path
+from .filesystem_noise import is_filesystem_noise_name
 
 _AUDIO_PREP_CACHE_NAME = "audio-prep-validation-cache.json"
 
@@ -92,7 +92,7 @@ def build_audio_prep_status(
         }
 
     has_files = any(
-        path.is_file() and not path.is_symlink() and not is_ignored_os_metadata_path(path)
+        path.is_file() and not path.is_symlink() and not is_filesystem_noise_name(path.name)
         for path in working_path.rglob("*")
     )
     if not has_files:

@@ -13,6 +13,7 @@ from typing import Any
 from .context import resolve_project
 from .delivery import _generated_zip_pattern, _regular_no_symlink, _safe_relative, _sha256
 from .errors import ContextError, UnsafeOperationError, ValidationError
+from .filesystem_noise import path_contains_filesystem_noise
 from .revision import _load_manifest, _validate_project_state
 from .versions import application_root
 
@@ -91,6 +92,8 @@ def _root_snapshot(delivery_root: Path, project_id: str) -> tuple[dict[str, Path
             continue
         if not path.is_file():
             issues.append(_issue("UNSAFE_DELIVERY_ITEM", "Unsupported delivery item type.", path=relative))
+            continue
+        if path_contains_filesystem_noise(relative):
             continue
         if path.parent == delivery_root and generated.fullmatch(path.name):
             continue

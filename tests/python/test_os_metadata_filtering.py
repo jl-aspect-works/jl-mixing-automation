@@ -12,7 +12,7 @@ from jl_mixing.errors import ValidationError
 from jl_mixing.intake import validate_intake
 from jl_mixing.managed_client_file_provenance import _WorkingHashIndex
 from jl_mixing.managed_client_files import plan_import
-from jl_mixing.os_metadata import is_ignored_os_metadata_name
+from jl_mixing.filesystem_noise import is_filesystem_noise_name
 from jl_mixing.revision_source import build_plan as build_revision_source_plan
 from jl_mixing.source_import import build_plan as build_project_source_plan
 
@@ -29,11 +29,11 @@ class OsMetadataFilteringTests(unittest.TestCase):
     def test_policy_is_platform_neutral_and_preserves_other_dotfiles(self) -> None:
         for name in (*IGNORED_NAMES, "THUMBS.DB", "Desktop.INI"):
             with self.subTest(name=name):
-                self.assertTrue(is_ignored_os_metadata_name(name))
+                self.assertTrue(is_filesystem_noise_name(name))
 
         for name in (".gitignore", ".mix-notes", "DS_Store", "Thumbs.db.txt", "mix._draft.wav"):
             with self.subTest(name=name):
-                self.assertFalse(is_ignored_os_metadata_name(name))
+                self.assertFalse(is_filesystem_noise_name(name))
 
     def test_delivery_selection_ignores_metadata_in_root_and_variants(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

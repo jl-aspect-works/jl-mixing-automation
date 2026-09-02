@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from .errors import ValidationError
 from .intake_cache import cache_identity, load_cache, reusable_cache_record, sha256_file, write_cache
-from .os_metadata import is_ignored_os_metadata_path
+from .filesystem_noise import is_filesystem_noise_name
 
 AUDIO_EXTENSIONS = {".wav", ".wave", ".aif", ".aiff", ".flac", ".mp3", ".m4a"}
 _VALIDATION_WORKERS = 2
@@ -260,7 +260,7 @@ def validate_intake(
         (
             p
             for p in source.rglob("*")
-            if p.is_file() and not p.is_symlink() and not is_ignored_os_metadata_path(p)
+            if p.is_file() and not p.is_symlink() and not is_filesystem_noise_name(p.name)
         ),
         key=lambda p: str(p.relative_to(source)).lower(),
     )

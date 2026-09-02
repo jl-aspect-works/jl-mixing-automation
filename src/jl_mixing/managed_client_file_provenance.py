@@ -18,7 +18,7 @@ from typing import Any
 from . import diagnostic_log
 from .errors import UnsafeOperationError, ValidationError
 from . import managed_client_files as base
-from .os_metadata import is_ignored_os_metadata_name
+from .filesystem_noise import is_filesystem_noise_name
 
 PROVENANCE_PATH = Path("00_Admin") / "audio-prep-provenance.json"
 SCHEMA_VERSION = 1
@@ -122,7 +122,7 @@ class _WorkingHashIndex:
                 candidate = current_path / name
                 if candidate.is_symlink() or not candidate.is_file():
                     continue
-                if is_ignored_os_metadata_name(name):
+                if is_filesystem_noise_name(name):
                     continue
                 size = candidate.stat().st_size
                 hash_started = time.perf_counter()
