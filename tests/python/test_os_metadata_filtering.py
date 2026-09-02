@@ -102,10 +102,8 @@ class OsMetadataFilteringTests(unittest.TestCase):
 
             archive = root / "source.zip"
             with zipfile.ZipFile(archive, "w") as handle:
-                handle.writestr("Mix.wav", b"mix")
-                handle.writestr(".mix-notes", b"keep")
-                for name in IGNORED_NAMES:
-                    handle.writestr(name, b"metadata")
+                for path in source.iterdir():
+                    handle.write(path, path.name)
 
             zip_plan = plan_import(project, "zip", (archive,))
             self.assertEqual(
