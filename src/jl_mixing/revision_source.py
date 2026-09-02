@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import ContextError, UnsafeOperationError, ValidationError
+from .os_metadata import is_ignored_os_metadata_path
 
 _RESERVED_NAME = "revision_notes.md"
 
@@ -56,6 +57,8 @@ def build_plan(source: Path) -> RevisionSourcePlan:
 
     def add_file(path: Path) -> None:
         _validate_name(path.name, path)
+        if is_ignored_os_metadata_path(path):
+            return
         key = path.name.casefold()
         if key in seen:
             raise ValidationError(
