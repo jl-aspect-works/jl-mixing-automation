@@ -128,7 +128,11 @@ def _package_record(path: Path, delivery_root: Path, snapshot: dict[str, Path]) 
         return record
     try:
         with zipfile.ZipFile(path, "r") as handle:
-            members = {info.filename for info in handle.infolist() if not info.is_dir()}
+            members = {
+                info.filename
+                for info in handle.infolist()
+                if not info.is_dir() and not path_contains_filesystem_noise(info.filename)
+            }
             expected = set(snapshot)
             missing = sorted(expected - members)
             extra = sorted(members - expected)

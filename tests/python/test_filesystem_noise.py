@@ -61,6 +61,29 @@ class FilesystemNoiseTests(unittest.TestCase):
             self.assertEqual(status["untracked"], ["unexpected.txt"])
             self.assertIn("UNTRACKED_DELIVERY_FILE", {item["code"] for item in status["issues"]})
 
+    def test_delivery_package_omits_and_ignores_archived_filesystem_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = write_project(Path(tmp))
+            created = create_delivery(DeliveryCreateRequest(project, make_zip=True))
+            self.assertIsNotNone(created.zip_name)
+            delivery = project / "05_Final_Delivery"
+            (delivery / ".DS_Store").write_bytes(b"finder")
+
+            rebuilt = create_delivery(
+                DeliveryCreateRequest(project, overwrite=True, make_zip=True)
+            )
+            self.assertIsNotNone(rebuilt.zip_name)
+            rebuilt_package = delivery / str(rebuilt.zip_name)
+            with zipfile.ZipFile(rebuilt_package) as handle:
+                self.assertNotIn(".DS_Store", handle.namelist())
+
+            with zipfile.ZipFile(rebuilt_package, "a") as handle:
+                write_regular_zip_entry(handle, ".DS_Store", b"finder")
+
+            status = inspect_delivery(DeliveryStatusRequest(project))
+            self.assertEqual(status["package_state"], "current")
+            self.assertEqual(status["current_package"]["issues"], [])
+
     def test_folder_import_excludes_nested_filesystem_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
