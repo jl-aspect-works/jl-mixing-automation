@@ -20,6 +20,7 @@ from .approval import derive_project_stage
 from .context import resolve_project, revision_root_for_number, studio_root as resolve_studio_root
 from .errors import ContextError, UnsafeOperationError, ValidationError
 from .metadata import create_v11, now_iso8601
+from .os_metadata import is_ignored_os_metadata_path
 from .revision import _load_manifest, _validate_project_state, _validate_schema
 from .transactions import (
     _fail_requested,
@@ -263,6 +264,8 @@ def plan_delivery(
     excluded: list[DeliveryExclusion] = []
 
     def consider_file(item: Path, source_path: str) -> None:
+        if is_ignored_os_metadata_path(item):
+            return
         if item.is_symlink():
             raise ValidationError(f"Symbolic links are not allowed in a delivery source: {item}")
         if not _regular_no_symlink(item):
@@ -281,6 +284,8 @@ def plan_delivery(
         selected.append(DeliverySelection(item, source_path, item.name, kind, relative))
 
     for item in sorted(revision_root.iterdir(), key=lambda path: (path.name.casefold(), path.name)):
+        if is_ignored_os_metadata_path(item):
+            continue
         if item.name == "Revision_Notes.md":
             excluded.append(DeliveryExclusion(item.name, "revision notes"))
             continue
@@ -288,6 +293,8 @@ def plan_delivery(
             raise ValidationError(f"Symbolic links are not allowed in a delivery source: {item}")
         if item.name == "Variants" and item.is_dir():
             for variant in sorted(item.iterdir(), key=lambda path: (path.name.casefold(), path.name)):
+                if is_ignored_os_metadata_path(variant):
+                    continue
                 if variant.is_dir() and not variant.is_symlink():
                     raise ValidationError(f"Subdirectories are not allowed in revision Variants: {variant}")
                 consider_file(variant, f"Variants/{variant.name}")
