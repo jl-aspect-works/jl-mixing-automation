@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import stat
 import tempfile
 import unittest
 import zipfile
@@ -26,6 +27,12 @@ def managed_project(root: Path) -> Path:
     (project / "01_Client_Files" / "Original_Delivery").mkdir(parents=True)
     (project / "02_Audio_Preparation" / "Working_Audio").mkdir(parents=True)
     return project
+
+
+def write_regular_zip_entry(handle: zipfile.ZipFile, name: str, content: bytes) -> None:
+    info = zipfile.ZipInfo(name)
+    info.external_attr = (stat.S_IFREG | 0o644) << 16
+    handle.writestr(info, content)
 
 
 class FilesystemNoiseTests(unittest.TestCase):
@@ -88,10 +95,10 @@ class FilesystemNoiseTests(unittest.TestCase):
             project = managed_project(root)
             archive = root / "delivery.zip"
             with zipfile.ZipFile(archive, "w") as handle:
-                handle.writestr("mix.wav", b"mix")
-                handle.writestr(".DS_Store", b"finder")
-                handle.writestr("Stems/Thumbs.db", b"windows")
-                handle.writestr("Stems/._bass.wav", b"appledouble")
+                write_regular_zip_entry(handle, "mix.wav", b"mix")
+                write_regular_zip_entry(handle, ".DS_Store", b"finder")
+                write_regular_zip_entry(handle, "Stems/Thumbs.db", b"windows")
+                write_regular_zip_entry(handle, "Stems/._bass.wav", b"appledouble")
 
             zip_plan = plan_import(project, "zip", (archive,))
             self.assertEqual([item["relative_path"] for item in zip_plan["files"]], ["mix.wav"])
