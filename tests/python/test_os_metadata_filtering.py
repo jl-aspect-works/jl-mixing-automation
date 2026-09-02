@@ -5,10 +5,12 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from jl_mixing import managed_client_files as managed_base
 from jl_mixing.audio_prep_status import build_audio_prep_status
 from jl_mixing.delivery import plan_delivery
 from jl_mixing.errors import ValidationError
 from jl_mixing.intake import validate_intake
+from jl_mixing.managed_client_file_provenance import _WorkingHashIndex
 from jl_mixing.managed_client_files import plan_import
 from jl_mixing.os_metadata import is_ignored_os_metadata_name
 from jl_mixing.revision_source import build_plan as build_revision_source_plan
@@ -156,6 +158,23 @@ class OsMetadataFilteringTests(unittest.TestCase):
             self.assertEqual(status["summary"]["files_discovered"], 0)
             self.assertEqual(status["summary"]["blocking_errors"], 0)
             self.assertEqual(status["files"], [])
+
+    def test_provenance_recovery_ignores_metadata_content_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            working = project / "02_Audio_Preparation" / "Working_Audio"
+            working.mkdir(parents=True)
+            primary = working / "Mix.wav"
+            primary.write_bytes(b"same-content")
+            (working / "._Mix.wav").write_bytes(b"same-content")
+
+            digest = managed_base._sha256_file(primary)
+            match = _WorkingHashIndex(project).match(
+                digest,
+                ambiguity_message="OS metadata must not create a false provenance ambiguity",
+            )
+
+            self.assertEqual(match, "02_Audio_Preparation/Working_Audio/Mix.wav")
 
 
 if __name__ == "__main__":
