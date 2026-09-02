@@ -36,6 +36,7 @@ DeliveryMode = Literal["default", "overwrite", "clean"]
 @dataclass(frozen=True)
 class DeliverySelection:
     source: Path
+    source_path: str
     name: str
     deliverable_type: str
     path: str
@@ -261,7 +262,7 @@ def plan_delivery(
     selected: list[DeliverySelection] = []
     excluded: list[DeliveryExclusion] = []
 
-    def consider_file(item: Path) -> None:
+    def consider_file(item: Path, source_path: str) -> None:
         if item.is_symlink():
             raise ValidationError(f"Symbolic links are not allowed in a delivery source: {item}")
         if not _regular_no_symlink(item):
@@ -277,7 +278,7 @@ def plan_delivery(
             return
         kind = classify_deliverable(item.name)
         relative = f"Stems/{item.name}" if kind == "stems" else item.name
-        selected.append(DeliverySelection(item, item.name, kind, relative))
+        selected.append(DeliverySelection(item, source_path, item.name, kind, relative))
 
     for item in sorted(revision_root.iterdir(), key=lambda path: (path.name.casefold(), path.name)):
         if item.name == "Revision_Notes.md":
@@ -289,11 +290,11 @@ def plan_delivery(
             for variant in sorted(item.iterdir(), key=lambda path: (path.name.casefold(), path.name)):
                 if variant.is_dir() and not variant.is_symlink():
                     raise ValidationError(f"Subdirectories are not allowed in revision Variants: {variant}")
-                consider_file(variant)
+                consider_file(variant, f"Variants/{variant.name}")
             continue
         if item.is_dir():
             raise ValidationError(f"Subdirectories are not allowed in a delivery source: {item}")
-        consider_file(item)
+        consider_file(item, item.name)
 
     if not selected:
         raise ValidationError("No deliverable files were found after applying filters")
@@ -405,6 +406,7 @@ def _stage_delivery(
             raise ValidationError(f"Copy verification failed: {source}")
         records.append({
             "path": record.path,
+            "source_path": record.source_path,
             "deliverable_type": record.deliverable_type,
             "size_bytes": destination.stat().st_size,
             "sha256": after,
