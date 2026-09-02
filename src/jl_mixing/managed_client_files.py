@@ -16,6 +16,7 @@ from typing import Any, BinaryIO, Callable, Iterable
 
 from . import diagnostic_log
 from .errors import UnsafeOperationError, ValidationError
+from .filesystem_noise import path_contains_filesystem_noise
 from .transactions import create_staging_directory
 
 ORIGINAL_ROOT = Path("01_Client_Files") / "Original_Delivery"
@@ -135,6 +136,8 @@ def _collect_files(source_kind: str, sources: tuple[Path, ...]) -> list[SourceFi
 
     def add(relative: str, source: Path | None, zip_member: str | None, size: int, fingerprint: str) -> None:
         safe = _safe_relative(relative)
+        if path_contains_filesystem_noise(safe):
+            return
         key = safe.casefold()
         if key in seen:
             raise ValidationError(f"Duplicate imported relative path: {safe}")
