@@ -19,6 +19,7 @@ from typing import Any, Literal
 from .approval import derive_project_stage
 from .context import resolve_project, revision_root_for_number, studio_root as resolve_studio_root
 from .errors import ContextError, UnsafeOperationError, ValidationError
+from .filesystem_noise import path_contains_filesystem_noise
 from .metadata import create_v11, now_iso8601
 from .filesystem_noise import is_filesystem_noise_name
 from .revision import _load_manifest, _validate_project_state, _validate_schema
@@ -209,6 +210,8 @@ def _zip_stage(stage: Path, zip_name: str, project_id: str) -> None:
         for path in sorted(stage.rglob("*"), key=lambda value: (value.relative_to(stage).as_posix().casefold(), value.relative_to(stage).as_posix())):
             relative = path.relative_to(stage).as_posix()
             if path == archive or generated.fullmatch(path.name):
+                continue
+            if path_contains_filesystem_noise(relative):
                 continue
             if path.is_symlink():
                 raise ValidationError(f"Symbolic links cannot be archived in a delivery ZIP: {path}")
