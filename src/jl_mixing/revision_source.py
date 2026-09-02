@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import ContextError, UnsafeOperationError, ValidationError
+from .filesystem_noise import is_filesystem_noise_name
 
 _RESERVED_NAME = "revision_notes.md"
 
@@ -56,6 +57,8 @@ def build_plan(source: Path) -> RevisionSourcePlan:
 
     def add_file(path: Path) -> None:
         _validate_name(path.name, path)
+        if is_filesystem_noise_name(path.name):
+            return
         key = path.name.casefold()
         if key in seen:
             raise ValidationError(

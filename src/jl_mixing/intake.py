@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from .errors import ValidationError
 from .intake_cache import cache_identity, load_cache, reusable_cache_record, sha256_file, write_cache
+from .filesystem_noise import is_filesystem_noise_name
 
 AUDIO_EXTENSIONS = {".wav", ".wave", ".aif", ".aiff", ".flac", ".mp3", ".m4a"}
 _VALIDATION_WORKERS = 2
@@ -256,7 +257,11 @@ def validate_intake(
     if progress is not None:
         progress({"phase": "scanning", "completed": 0, "total": None, "active": []})
     files = sorted(
-        (p for p in source.rglob("*") if p.is_file() and not p.is_symlink()),
+        (
+            p
+            for p in source.rglob("*")
+            if p.is_file() and not p.is_symlink() and not is_filesystem_noise_name(p.name)
+        ),
         key=lambda p: str(p.relative_to(source)).lower(),
     )
     detected_ffprobe = ffprobe_path if ffprobe_path is not None else shutil.which("ffprobe")

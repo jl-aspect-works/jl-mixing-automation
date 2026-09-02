@@ -16,7 +16,7 @@ from typing import Any, BinaryIO, Callable, Iterable
 
 from . import diagnostic_log
 from .errors import UnsafeOperationError, ValidationError
-from .filesystem_noise import path_contains_filesystem_noise
+from .filesystem_noise import is_filesystem_noise_name, path_contains_filesystem_noise
 from .transactions import create_staging_directory
 
 ORIGINAL_ROOT = Path("01_Client_Files") / "Original_Delivery"
@@ -117,6 +117,8 @@ def _audio_prep_content_match(project_root: Path, source: Path) -> str | None:
             candidate = current_path / name
             if candidate.is_symlink() or not candidate.is_file():
                 continue
+            if is_filesystem_noise_name(name):
+                continue
             if candidate.stat().st_size != source.stat().st_size:
                 continue
             if _sha256_file(candidate) == source_hash:
@@ -149,6 +151,8 @@ def _collect_files(source_kind: str, sources: tuple[Path, ...]) -> list[SourceFi
             raise ValidationError("At least one source file is required.")
         for raw in sources:
             source = _safe_source(raw)
+            if is_filesystem_noise_name(source.name):
+                continue
             add(source.name, source, None, source.stat().st_size, _source_fingerprint(source))
     elif source_kind == "folder":
         if len(sources) != 1:
@@ -163,6 +167,8 @@ def _collect_files(source_kind: str, sources: tuple[Path, ...]) -> list[SourceFi
                 source = current_path / name
                 if source.is_symlink() or not source.is_file():
                     raise UnsafeOperationError(f"Folder import does not allow special files: {source}")
+                if is_filesystem_noise_name(name):
+                    continue
                 relative = source.relative_to(root).as_posix()
                 add(relative, source, None, source.stat().st_size, _source_fingerprint(source))
     elif source_kind == "zip":
@@ -177,6 +183,8 @@ def _collect_files(source_kind: str, sources: tuple[Path, ...]) -> list[SourceFi
                         continue
                     if stat.S_ISLNK(mode) or (mode and not stat.S_ISREG(mode)):
                         raise UnsafeOperationError(f"ZIP contains an unsupported special entry: {info.filename}")
+                    if is_filesystem_noise_name(PurePosixPath(info.filename).name):
+                        continue
                     relative = _safe_relative(info.filename)
                     add(relative, archive, info.filename, info.file_size, f"zip:{info.CRC}:{info.file_size}")
         except zipfile.BadZipFile as exc:

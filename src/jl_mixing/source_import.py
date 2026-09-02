@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import UnsafeOperationError, ValidationError
+from .filesystem_noise import is_filesystem_noise_name
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,8 @@ def build_plan(source: Path) -> SourcePlan:
 
     if source_type == "file":
         _validate_component(source.name, source)
-        add_entry(Path(source.name), "file")
+        if not is_filesystem_noise_name(source.name):
+            add_entry(Path(source.name), "file")
     else:
         def walk(directory: Path, relative_directory: Path) -> None:
             try:
@@ -83,6 +85,8 @@ def build_plan(source: Path) -> SourcePlan:
                 _validate_component(child.name, child_path)
                 relative = relative_directory / child.name
                 entry_type = _classify(child_path)
+                if entry_type == "file" and is_filesystem_noise_name(child_path.name):
+                    continue
                 add_entry(relative, entry_type)
                 if entry_type == "directory":
                     walk(child_path, relative)
