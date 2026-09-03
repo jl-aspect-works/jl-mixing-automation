@@ -7,6 +7,7 @@
 - [Installation Guide](INSTALLATION_GUIDE.md)
 - [Automation API Design](AUTOMATION_API.md)
 - [Automation API Implementation Status](AUTOMATION_API_IMPLEMENTATION.md)
+- [v2.2 Release-Candidate Notes](RELEASE_NOTES_V2.2.md)
 - [v2.1 Release Notes](RELEASE_NOTES_V2.1.md)
 
 ## Development and architecture

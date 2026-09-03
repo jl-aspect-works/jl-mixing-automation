@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0-rc.1
+
+- Added optional revision-relative `source_path` provenance to delivery-manifest file records so downstream consumers can identify the authoritative revision source used for each packaged file.
+- Kept existing delivery manifests valid and preserved Automation API `1.0` and workspace metadata schema `1.1.0`.
+- Added one platform-neutral policy that ignores `.DS_Store`, AppleDouble `._*`, `Thumbs.db`, and `desktop.ini` across Delivery, Intake, managed imports, Audio Prep, source imports, provenance recovery, and generated delivery ZIP reconciliation.
+- Preserved legitimate dotfiles as project content; ignored operating-system metadata is not deleted merely because it is discovered.
+- Added cross-platform regression coverage for delivery provenance and filesystem-noise handling required by Studio 2.2 Listening workflows.
+
 ## 2.1.0
 
 - Added Automation-owned Studio, client, and project metadata update capabilities used by Studio v2.1.
