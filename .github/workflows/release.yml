@@ -283,6 +283,6 @@ jobs:
               gh release create "$RELEASE_TAG" "${assets[@]}" \
                   --verify-tag \
                   --title "JL Mixing Automation $RELEASE_VERSION" \
-                  --notes-file docs/RELEASE_NOTES_V2.1.md \
+                  --notes-file docs/RELEASE_NOTES_V2.2.md \
                   "${prerelease_args[@]}"
           fi
