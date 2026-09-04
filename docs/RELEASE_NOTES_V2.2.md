@@ -2,11 +2,11 @@
 
 JL Mixing Automation 2.2 is the coordinated provider release for JL Mixing Studio 2.2. It adds delivery-source provenance and consistent operating-system metadata filtering needed by Studio's Delivered Listening workflow without changing Automation API `1.0` or workspace metadata schema `1.1.0`.
 
-> Release-candidate status: these notes describe the intended 2.2 release. Packaged Windows, macOS, and coordinated Studio acceptance remain required before promotion to stable.
+Automation 2.2.0 was qualified through coordinated packaged acceptance with JL Mixing Studio 2.2 on Windows and macOS Intel. Apple Silicon manual acceptance was deferred because suitable hardware was unavailable; the published Apple Silicon package and required automated architecture checks passed.
 
 ## Installation
 
-Download the release archive for your platform from the Assets section and verify its accompanying SHA-256 checksum before installing. Replace `<version>` below with the exact candidate version shown on the release.
+Download the release archive for your platform from the Assets section and verify its accompanying SHA-256 checksum before installing. Replace `<version>` below with the version shown on the release (`2.2.0` for this stable release).
 
 ### macOS
 
@@ -65,7 +65,7 @@ Linux/source installs require Bash, Python 3.10+ with `venv`, and jq.
 - Existing path, classification, hash, and replacement behavior remains unchanged.
 - Older delivery manifests without `source_path` remain valid and are supported by Studio's conservative legacy fallback.
 
-Studio `2.2.0-rc.1` is coordinated with Automation `2.2.0-rc.1` so Delivered Listening acceptance can verify that the published primary copy follows the exact source used by Automation's delivery package.
+Studio `2.2.0` is coordinated with Automation `2.2.0`. Stable qualification used the accepted `2.2.0-rc.1` pair to verify that the Delivered Listening primary copy follows the exact source used by Automation's delivery package.
 
 ## Operating-system metadata handling
 
@@ -92,4 +92,4 @@ Application release, API version, and metadata schema remain independent. Consum
 
 ## Release qualification
 
-The provenance and filesystem-noise changes have passed cross-platform branch/runtime coverage. Packaged Automation installation/runtime checks and coordinated Studio 2.2 acceptance remain required before stable promotion.
+The provenance and filesystem-noise changes passed cross-platform branch/runtime coverage, packaged Automation installation/runtime checks, and coordinated Studio 2.2 acceptance. No release-blocking finding remained after the accepted RC1 cycle.

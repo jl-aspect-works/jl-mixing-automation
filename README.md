@@ -5,7 +5,7 @@
     <img alt="JL Mixing Automation by JL Aspect Works" width="420" src="https://raw.githubusercontent.com/jl-aspect-works/jl-brand/main/jl-mixing-automation-light-product.png">
   </picture>
 </p>
-JL Mixing Automation v2.2 release candidates are the cross-platform workflow engine behind JL Mixing Studio. Automation creates consistent workspaces, preserves original client files, validates intake, manages revisions/approval, exposes the Automation API used by Studio, and builds verified final-delivery packages.
+JL Mixing Automation v2.2 is the cross-platform workflow engine behind JL Mixing Studio. Automation creates consistent workspaces, preserves original client files, validates intake, manages revisions/approval, exposes the Automation API used by Studio, and builds verified final-delivery packages.
 
 The authoritative runtime is Python and is shared across Windows and macOS. Automation API remains version `1.0`, while workspace metadata schemas remain version `1.1.0`.
 
@@ -85,7 +85,7 @@ Clients must use the reported `api_version` and `capabilities`; they must not in
 
 ## Compatibility
 
-- Automation application release candidate: `2.2.0-rc.1`
+- Automation application release: `2.2.0`
 - Automation API: `1.0`
 - readable metadata schemas: `1.1.0`
 - writable metadata schema: `1.1.0`
@@ -95,6 +95,6 @@ New records identify the current application release in `created_with` without c
 
 ## Documentation
 
-Start with [`docs/README.md`](docs/README.md), the [`v2.1 User Guide`](docs/USER_GUIDE.md), the [`Installation Guide`](docs/INSTALLATION_GUIDE.md), the [`Release Checklist`](docs/RELEASE_CHECKLIST.md), and the [`2.2 release-candidate notes`](docs/RELEASE_NOTES_V2.2.md).
+Start with [`docs/README.md`](docs/README.md), the [`v2.1 User Guide`](docs/USER_GUIDE.md), the [`Installation Guide`](docs/INSTALLATION_GUIDE.md), the [`Release Checklist`](docs/RELEASE_CHECKLIST.md), and the [`2.2 release notes`](docs/RELEASE_NOTES_V2.2.md).
 
 JL Mixing Automation is licensed under Apache-2.0. See [LICENSE](LICENSE).
