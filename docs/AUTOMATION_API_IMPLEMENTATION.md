@@ -31,6 +31,8 @@ intake.validate
 intake.validate.report
 project.create
 project.create.artist
+project.delete.plan
+project.delete.execute
 revision.approve
 revision.create
 revision.create.description

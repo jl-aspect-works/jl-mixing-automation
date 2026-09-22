@@ -137,6 +137,8 @@ Capability names use stable dotted identifiers. Initial candidates include:
 
 Mutating operations that support preview return `status: planned` and a structured plan. The confirmed operation must identify the same logical request. Clients must still re-read authoritative workspace state after success; JSON output does not replace post-operation reconciliation.
 
+Project deletion has a separate authoritative plan/execute pair with a mandatory fresh fingerprint and typed Project Name. See `docs/API_PROJECT_DELETION.md` for the permanent-deletion and external Listening-copy contract.
+
 ## Read-only query scope
 
 Automation API 1.0 includes system and capability discovery but does not include general read-only workspace, client, project, revision, report, or delivery query operations.

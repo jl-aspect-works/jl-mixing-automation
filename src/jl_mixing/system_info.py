@@ -28,6 +28,8 @@ _CAPABILITIES = [
     "managed.requests.stdinjson",
     "project.create",
     "project.create.artist",
+    "project.delete.plan",
+    "project.delete.execute",
     "project.update",
     "revision.approve",
     "revision.close",

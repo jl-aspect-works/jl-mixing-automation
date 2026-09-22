@@ -33,6 +33,9 @@ from .api.managed_client_files import parse_reset_args as parse_managed_reset_ar
 from .api.project_create import _error_envelope as project_error_envelope
 from .api.project_create import execute as project_execute
 from .api.project_create import parse_args as parse_project_args
+from .api.project_delete import _error as project_delete_error_envelope
+from .api.project_delete import execute as project_delete_execute
+from .api.project_delete import parse_args as parse_project_delete_args
 from .api.project_update import _error_envelope as project_update_error_envelope
 from .api.project_update import execute as project_update_execute
 from .api.project_update import parse_args as parse_project_update_args
@@ -202,6 +205,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ValidationError as exc:
             _emit_json(project_error_envelope("VALIDATION_FAILED", str(exc), exc.exit_code, status="blocked")); return exc.exit_code
         payload, status = project_execute(request); _emit_json(payload); return status
+
+    if len(args) >= 2 and args[0] == "project" and args[1] in {"delete-plan", "delete-execute"}:
+        plan_only = args[1] == "delete-plan"
+        operation = "project.delete.plan" if plan_only else "project.delete.execute"
+        try: request = parse_project_delete_args(args[2:], plan_only=plan_only)
+        except ArgumentError as exc:
+            _emit_json(project_delete_error_envelope(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
+        payload, status = project_delete_execute(request, plan_only=plan_only); _emit_json(payload); return status
 
     if len(args) >= 2 and args[0:2] == ["project", "update"]:
         try: request = parse_project_update_args(args[2:])
