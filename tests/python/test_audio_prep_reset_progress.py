@@ -21,15 +21,17 @@ def events(output: io.StringIO) -> list[dict]:
 class AudioPrepResetProgressTests(unittest.TestCase):
     def test_skipped_files_do_not_make_finalization_counts_go_backwards(self) -> None:
         output = io.StringIO()
-        adapter = api._ManagedExecutionProgressAdapter("audio.prep.reset.execute", 2)
+        adapter = api._ManagedExecutionProgressAdapter("audio.prep.reset.execute", 2, include_planning=True)
         with redirect_stderr(output):
+            adapter.start()
+            adapter({"phase": "planning", "completed": 2, "total": 2, "active": []})
             adapter({"phase": "staging", "completed": 2, "total": 2, "active": []})
             adapter({"phase": "importing", "completed": 2, "total": 2, "active": []})
             adapter({"phase": "finalizing", "completed": 1, "total": 1, "active": ["one.wav"]})
             adapter.finish()
         overall = [event["overall_completed"] for event in events(output)]
         self.assertEqual(overall, sorted(overall))
-        self.assertEqual(overall[-1], 6)
+        self.assertEqual(overall[-1], 8)
 
     def test_execute_emits_real_counts_and_reserves_completion_until_engine_returns(self) -> None:
         request = api.ResetRequest(Path("/project"), ("one.wav", "two.wav"), "plan-id", {}, "stderr-json")
@@ -50,7 +52,7 @@ class AudioPrepResetProgressTests(unittest.TestCase):
 
         with (
             patch.object(api, "resolve_project", return_value=Path("/project")),
-            patch.object(api, "plan_reset", return_value=plan),
+            patch.object(api, "plan_reset", return_value=plan) as plan_reset,
             patch.object(api, "execute_plan", side_effect=execute),
             patch.object(api, "_project_data", return_value={}),
             redirect_stderr(output),
@@ -61,7 +63,10 @@ class AudioPrepResetProgressTests(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         reported = events(output)
         self.assertEqual(reported[0]["phase"], "planning")
-        self.assertIsNone(reported[0]["total"])
+        self.assertEqual(reported[0]["total"], 2)
+        self.assertEqual(reported[0]["completed"], 0)
+        plan_reset.assert_called_once()
+        self.assertIsNotNone(plan_reset.call_args.kwargs["progress"])
         overall = [event["overall_completed"] for event in reported]
         self.assertEqual(overall, sorted(overall))
         self.assertEqual(reported[-1]["phase"], "complete")

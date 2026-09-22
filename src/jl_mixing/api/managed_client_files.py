@@ -66,10 +66,12 @@ def _emit_progress(operation: str, event: dict[str, Any]) -> None:
 class _ManagedExecutionProgressAdapter:
     """Translate phase-local engine counts into monotonic managed-file progress."""
 
-    def __init__(self, operation: str, total_files: int):
+    def __init__(self, operation: str, total_files: int, *, include_planning: bool = False):
         self.operation = operation
         self.total_files = total_files
-        self.overall_total = total_files * 3
+        self.include_planning = include_planning
+        self.overall_total = total_files * (4 if include_planning else 3)
+        self.planning_complete_emitted = False
         self.staging_complete_emitted = False
         self.finalizing_seen = False
 
@@ -88,28 +90,48 @@ class _ManagedExecutionProgressAdapter:
 
     def _finish_staging(self) -> None:
         if not self.staging_complete_emitted:
-            self._emit("staging", self.total_files, [], self.total_files)
+            overall_completed = self.total_files * (2 if self.include_planning else 1)
+            self._emit("staging", self.total_files, [], overall_completed)
             self.staging_complete_emitted = True
+
+    def _finish_planning(self) -> None:
+        if self.include_planning and not self.planning_complete_emitted:
+            self._emit("planning", self.total_files, [], self.total_files)
+            self.planning_complete_emitted = True
+
+    def start(self) -> None:
+        if self.include_planning:
+            self._emit("planning", 0, [], 0)
 
     def __call__(self, event: dict[str, Any]) -> None:
         phase = str(event.get("phase", ""))
         active = [str(value) for value in event.get("active", [])]
         completed = max(0, min(int(event.get("completed", 0)), self.total_files))
 
+        if phase == "planning" and self.include_planning:
+            self._emit("planning", completed, active, completed)
+            if completed >= self.total_files:
+                self.planning_complete_emitted = True
+            return
+
         if phase == "staging":
-            self._emit("staging", completed, active, completed)
+            self._finish_planning()
+            overall_completed = self.total_files + completed if self.include_planning else completed
+            self._emit("staging", completed, active, overall_completed)
             if completed >= self.total_files:
                 self.staging_complete_emitted = True
             return
 
         if phase == "importing":
             self._finish_staging()
-            self._emit("importing", completed, active, self.total_files + completed)
+            overall_completed = self.total_files * (2 if self.include_planning else 1) + completed
+            self._emit("importing", completed, active, overall_completed)
             return
 
         if phase == "finalizing":
             self._finish_staging()
-            overall_completed = min(self.total_files * 2 + completed, self.overall_total - 1)
+            phase_start = self.total_files * (3 if self.include_planning else 2)
+            overall_completed = min(phase_start + completed, self.overall_total - 1)
             self._emit("finalizing", completed, active, overall_completed)
             self.finalizing_seen = True
             return
@@ -121,9 +143,10 @@ class _ManagedExecutionProgressAdapter:
         _emit_progress(self.operation, event)
 
     def finish(self) -> None:
+        self._finish_planning()
         self._finish_staging()
         if not self.finalizing_seen:
-            self._emit("finalizing", 0, [], self.total_files * 2)
+            self._emit("finalizing", 0, [], self.total_files * (3 if self.include_planning else 2))
         self._emit("complete", self.total_files, [], self.overall_total)
 
 
@@ -245,12 +268,12 @@ def execute_reset(request: ResetRequest) -> tuple[dict[str, Any], int]:
             raise ValidationError("Audio Prep reset execute requires --plan-id.")
         root = resolve_project(request.project, Path.cwd())
         progress_enabled = request.progress == _PROGRESS_MODE
-        if progress_enabled:
-            _emit_progress(operation, {"phase": "planning", "completed": 0, "total": None, "overall_completed": 0, "overall_total": None, "active": []})
-        plan = plan_reset(root, request.relative_paths)
+        progress_adapter = _ManagedExecutionProgressAdapter(operation, len(request.relative_paths), include_planning=True) if progress_enabled else None
+        if progress_adapter is not None:
+            progress_adapter.start()
+        plan = plan_reset(root, request.relative_paths, progress=progress_adapter)
         if plan["plan_id"] != request.plan_id:
             raise ValidationError("Audio Prep reset plan is stale; run reset-plan again.")
-        progress_adapter = _ManagedExecutionProgressAdapter(operation, len(plan["files"])) if progress_enabled else None
         result = execute_plan(root, plan, request.decisions or {}, progress=progress_adapter)
         if progress_adapter is not None:
             progress_adapter.finish()

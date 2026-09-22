@@ -145,7 +145,8 @@ class ManagedClientFilesApiTests(unittest.TestCase):
             self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
             events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in executed.stderr.splitlines() if line.startswith("JL_PROGRESS ")]
             self.assertEqual(events[0]["phase"], "planning")
-            self.assertIsNone(events[0]["total"])
+            self.assertEqual(events[0]["total"], 2)
+            self.assertTrue(any(event["phase"] == "planning" and event["completed"] == 2 for event in events))
             self.assertTrue(any(event["phase"] == "importing" and event["completed"] == 1 and event["total"] == 2 for event in events))
             self.assertEqual([event["overall_completed"] for event in events], sorted(event["overall_completed"] for event in events))
             self.assertTrue(all(event["overall_completed"] < event["overall_total"] for event in events[1:-1]))
