@@ -29,7 +29,7 @@ class ClientDeleteApiTests(unittest.TestCase):
             self.assertEqual(status, 0, result)
             summary = result["data"]["summary"]
             self.assertEqual(summary["client"]["name"], "Test Client")
-            self.assertEqual(summary["client"]["path"], str(client))
+            self.assertEqual(summary["client"]["path"], str(client.resolve()))
             self.assertEqual(summary["project_count"], 0)
             self.assertGreaterEqual(summary["file_count"], 2)
             self.assertFalse(summary["recoverable"])
@@ -132,3 +132,4 @@ class ClientDeleteApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+cee29d4bdc876c179c6278f65eb53a080e91286e

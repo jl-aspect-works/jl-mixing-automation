@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Canonical JL Mixing Automation API launcher.
-set -eu
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec bash "$SCRIPT_DIR/jl-mixing-python-command" jl_mixing.cli "$@"
