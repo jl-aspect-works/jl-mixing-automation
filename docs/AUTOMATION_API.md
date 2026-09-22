@@ -181,6 +181,22 @@ Operations report `completed`, `total`, and `unit` only when the total is known 
 
 Progress support is optional by capability and operation. Cancellation semantics are not part of API 1.0 and require a separate design.
 
+### Audio Prep reset progress
+
+When `system-info` advertises `audio.prep.reset.progress`, callers may add
+`--progress=stderr-json` to `audio-prep reset-execute`. Each stderr line prefixed
+with `JL_PROGRESS ` contains JSON with operation `audio.prep.reset.execute`,
+phase (`planning`, `staging`, `importing`, `finalizing`, or `complete`),
+`completed`, `total`, `overall_completed`, `overall_total`, and `active` paths.
+Reset uses the selected source-file count from the reviewed plan for the initial
+planning event, then advances it as execute-time plan validation completes.
+Later events use engine-reported source-file counts and monotonically increasing
+overall steps. The terminal
+`complete` event is emitted only after execution and lineage recording return
+successfully. The final stdout response remains authoritative; a failed or
+rolled-back reset never emits the terminal completion event. Without the
+capability, clients should omit the flag and show indeterminate execution.
+
 ## JSON Schema publication
 
 Automation API schemas use JSON Schema Draft 2020-12 and remain distinct from persisted workspace metadata schemas.

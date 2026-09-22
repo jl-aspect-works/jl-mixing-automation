@@ -254,7 +254,12 @@ def plan_import(
     return plan
 
 
-def plan_reset(project_root: Path, relative_paths: tuple[str, ...]) -> dict[str, Any]:
+def plan_reset(
+    project_root: Path,
+    relative_paths: tuple[str, ...],
+    *,
+    progress: base.ProgressCallback | None = None,
+) -> dict[str, Any]:
     files: list[base.SourceFile] = []
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -273,6 +278,8 @@ def plan_reset(project_root: Path, relative_paths: tuple[str, ...]) -> dict[str,
         files.append(source_file)
         destination = _resolved_destination(project_root, relative, source, provenance, working_index) or (base.AUDIO_ROOT / Path(relative)).as_posix()
         items.append(base._item(project_root, f"audio:{index}", "audio_prep", destination, source_file))
+        if progress is not None:
+            progress({"phase": "planning", "completed": index + 1, "total": len(relative_paths), "active": [relative]})
     if not files:
         raise ValidationError("At least one Original Delivery file is required.")
     return {

@@ -38,6 +38,7 @@ class ResetRequest:
     relative_paths: tuple[str, ...]
     plan_id: str | None = None
     decisions: dict[str, str] | None = None
+    progress: str | None = None
 
 
 def _envelope(operation: str, status: str, data: dict[str, Any], *, errors: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -62,15 +63,17 @@ def _emit_progress(operation: str, event: dict[str, Any]) -> None:
     )
 
 
-class _ImportProgressAdapter:
-    """Translate phase-local engine progress into an additive monotonic import contract."""
+class _ManagedExecutionProgressAdapter:
+    """Translate phase-local engine counts into monotonic managed-file progress."""
 
-    def __init__(self, operation: str, total_files: int):
+    def __init__(self, operation: str, total_files: int, *, include_planning: bool = False):
         self.operation = operation
         self.total_files = total_files
-        self.overall_total = total_files * 3
+        self.include_planning = include_planning
+        self.overall_total = total_files * (4 if include_planning else 3)
+        self.planning_complete_emitted = False
         self.staging_complete_emitted = False
-        self.finalizing_emitted = False
+        self.finalizing_seen = False
 
     def _emit(self, phase: str, completed: int, active: list[str], overall_completed: int) -> None:
         _emit_progress(
@@ -87,30 +90,50 @@ class _ImportProgressAdapter:
 
     def _finish_staging(self) -> None:
         if not self.staging_complete_emitted:
-            self._emit("staging", self.total_files, [], self.total_files)
+            overall_completed = self.total_files * (2 if self.include_planning else 1)
+            self._emit("staging", self.total_files, [], overall_completed)
             self.staging_complete_emitted = True
+
+    def _finish_planning(self) -> None:
+        if self.include_planning and not self.planning_complete_emitted:
+            self._emit("planning", self.total_files, [], self.total_files)
+            self.planning_complete_emitted = True
+
+    def start(self) -> None:
+        if self.include_planning:
+            self._emit("planning", 0, [], 0)
 
     def __call__(self, event: dict[str, Any]) -> None:
         phase = str(event.get("phase", ""))
         active = [str(value) for value in event.get("active", [])]
         completed = max(0, min(int(event.get("completed", 0)), self.total_files))
 
+        if phase == "planning" and self.include_planning:
+            self._emit("planning", completed, active, completed)
+            if completed >= self.total_files:
+                self.planning_complete_emitted = True
+            return
+
         if phase == "staging":
-            self._emit("staging", completed, active, completed)
+            self._finish_planning()
+            overall_completed = self.total_files + completed if self.include_planning else completed
+            self._emit("staging", completed, active, overall_completed)
             if completed >= self.total_files:
                 self.staging_complete_emitted = True
             return
 
         if phase == "importing":
             self._finish_staging()
-            self._emit("importing", completed, active, self.total_files + completed)
+            overall_completed = self.total_files * (2 if self.include_planning else 1) + completed
+            self._emit("importing", completed, active, overall_completed)
             return
 
         if phase == "finalizing":
             self._finish_staging()
-            overall_completed = min(self.total_files * 2 + completed, self.overall_total - 1)
+            phase_start = self.total_files * (3 if self.include_planning else 2)
+            overall_completed = min(phase_start + completed, self.overall_total - 1)
             self._emit("finalizing", completed, active, overall_completed)
-            self.finalizing_emitted = completed >= self.total_files
+            self.finalizing_seen = True
             return
 
         if phase == "complete":
@@ -120,9 +143,10 @@ class _ImportProgressAdapter:
         _emit_progress(self.operation, event)
 
     def finish(self) -> None:
+        self._finish_planning()
         self._finish_staging()
-        if not self.finalizing_emitted:
-            self._emit("finalizing", 0, [], self.total_files * 2)
+        if not self.finalizing_seen:
+            self._emit("finalizing", 0, [], self.total_files * (3 if self.include_planning else 2))
         self._emit("complete", self.total_files, [], self.overall_total)
 
 
@@ -202,7 +226,7 @@ def execute_import(request: ImportRequest) -> tuple[dict[str, Any], int]:
         if full_plan["plan_id"] != request.plan_id:
             raise ValidationError("Import plan is stale; run import-plan again.")
         plan = _selected_import_plan(full_plan, request.selected_relative_paths)
-        progress_adapter = _ImportProgressAdapter(operation, len(plan["files"])) if progress_enabled else None
+        progress_adapter = _ManagedExecutionProgressAdapter(operation, len(plan["files"])) if progress_enabled else None
         result = execute_plan(root, plan, request.decisions or {}, progress=progress_adapter)
         if progress_adapter is not None:
             progress_adapter.finish()
@@ -243,10 +267,16 @@ def execute_reset(request: ResetRequest) -> tuple[dict[str, Any], int]:
         if not request.plan_id:
             raise ValidationError("Audio Prep reset execute requires --plan-id.")
         root = resolve_project(request.project, Path.cwd())
-        plan = plan_reset(root, request.relative_paths)
+        progress_enabled = request.progress == _PROGRESS_MODE
+        progress_adapter = _ManagedExecutionProgressAdapter(operation, len(request.relative_paths), include_planning=True) if progress_enabled else None
+        if progress_adapter is not None:
+            progress_adapter.start()
+        plan = plan_reset(root, request.relative_paths, progress=progress_adapter)
         if plan["plan_id"] != request.plan_id:
             raise ValidationError("Audio Prep reset plan is stale; run reset-plan again.")
-        result = execute_plan(root, plan, request.decisions or {})
+        result = execute_plan(root, plan, request.decisions or {}, progress=progress_adapter)
+        if progress_adapter is not None:
+            progress_adapter.finish()
         return _envelope(operation, "success", {"project": _project_data(root), "plan_id": plan["plan_id"], "result": result}), 0
     except ContextError as exc: return _error(operation, "PROJECT_NOT_FOUND", str(exc), exc.exit_code), exc.exit_code
     except UnsafeOperationError as exc: return _error(operation, "UNSAFE_OPERATION", str(exc), exc.exit_code, status="blocked"), exc.exit_code
@@ -303,10 +333,17 @@ def parse_import_args(args: list[str], *, execute: bool) -> ImportRequest:
 
 def parse_reset_args(args: list[str], *, execute: bool) -> ResetRequest:
     project: Path | None = None; relative_paths: list[str] = []; plan_id: str | None = None
-    decisions: dict[str, str] | None = None; json_seen = 0; index = 0
+    decisions: dict[str, str] | None = None; progress: str | None = None; json_seen = 0; index = 0
     while index < len(args):
         arg = args[index]
         if arg == "--json": json_seen += 1
+        elif arg.startswith("--progress="):
+            value = arg.split("=", 1)[1]
+            if value != _PROGRESS_MODE:
+                raise ArgumentError(f"Unsupported Audio Prep reset progress mode: {value}. Expected {_PROGRESS_MODE}.")
+            if progress is not None:
+                raise ArgumentError("Audio Prep reset accepts at most one --progress option.")
+            progress = value
         elif arg in {"--project", "--relative-path", "--plan-id", "--decisions-json"}:
             index += 1
             if index >= len(args): raise ArgumentError(f"{arg} requires a value.")
@@ -319,6 +356,6 @@ def parse_reset_args(args: list[str], *, execute: bool) -> ResetRequest:
         index += 1
     if json_seen != 1: raise ArgumentError("Audio Prep reset requires exactly one --json option.")
     if not relative_paths: raise ArgumentError("At least one --relative-path is required.")
-    if not execute and (plan_id is not None or decisions is not None): raise ArgumentError("reset-plan does not accept execute-only options.")
+    if not execute and (plan_id is not None or decisions is not None or progress is not None): raise ArgumentError("reset-plan does not accept execute-only options.")
     if execute and plan_id is None: raise ArgumentError("reset-execute requires --plan-id.")
-    return ResetRequest(project, tuple(relative_paths), plan_id, decisions)
+    return ResetRequest(project, tuple(relative_paths), plan_id, decisions, progress)
