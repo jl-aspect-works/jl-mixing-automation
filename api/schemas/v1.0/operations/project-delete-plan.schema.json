@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/project-delete-plan.schema.json",
+  "type": "object", "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "project.delete.plan"},
+    "status": {"enum": ["planned", "blocked", "error"]},
+    "data": {"type": "object", "additionalProperties": true, "properties": {
+      "summary": {"type": "object", "additionalProperties": true,
+        "required": ["client", "project", "file_count", "total_bytes", "includes", "recoverable", "external_listening_copies", "fingerprint"],
+        "properties": {
+          "client": {"type": "object", "required": ["id", "name"]},
+          "project": {"type": "object", "required": ["id", "name", "path", "document_id"]},
+          "file_count": {"type": "integer", "minimum": 1},
+          "total_bytes": {"type": "integer", "minimum": 0},
+          "includes": {"type": "array", "items": {"type": "string"}},
+          "recoverable": {"const": false},
+          "external_listening_copies": {"const": "retained"},
+          "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      },
+      "deleted": {"const": false},
+      "external_listening_copies": {"const": "retained"},
+      "recoverable": {"const": false}
+    }},
+    "warnings": {"type": "array"}, "errors": {"type": "array"}
+  }
+}
