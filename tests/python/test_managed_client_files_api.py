@@ -132,6 +132,29 @@ class ManagedClientFilesApiTests(unittest.TestCase):
             self.assertEqual(original.read_bytes(), b"source")
             self.assertFalse(cache.exists())
 
+    def test_reset_streams_file_counts_and_preserves_originals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = fixture(Path(tmp))
+            originals = project / "01_Client_Files" / "Original_Delivery"
+            (originals / "one.wav").write_bytes(b"one")
+            (originals / "two.wav").write_bytes(b"two")
+            planned = run(project, "audio-prep", "reset-plan", "--json", "--relative-path", "one.wav", "--relative-path", "two.wav")
+            self.assertEqual(planned.returncode, 0, planned.stderr)
+            plan = json.loads(planned.stdout)["data"]["plan"]
+            executed = run(project, "audio-prep", "reset-execute", "--json", "--relative-path", "one.wav", "--relative-path", "two.wav", "--plan-id", plan["plan_id"], "--progress=stderr-json")
+            self.assertEqual(executed.returncode, 0, executed.stdout + executed.stderr)
+            events = [json.loads(line.removeprefix("JL_PROGRESS ")) for line in executed.stderr.splitlines() if line.startswith("JL_PROGRESS ")]
+            self.assertEqual(events[0]["phase"], "planning")
+            self.assertIsNone(events[0]["total"])
+            self.assertTrue(any(event["phase"] == "importing" and event["completed"] == 1 and event["total"] == 2 for event in events))
+            self.assertEqual([event["overall_completed"] for event in events], sorted(event["overall_completed"] for event in events))
+            self.assertTrue(all(event["overall_completed"] < event["overall_total"] for event in events[1:-1]))
+            self.assertEqual(events[-1]["phase"], "complete")
+            self.assertEqual(events[-1]["overall_completed"], events[-1]["overall_total"])
+            self.assertEqual((project / "02_Audio_Preparation" / "Working_Audio" / "one.wav").read_bytes(), b"one")
+            self.assertEqual((project / "02_Audio_Preparation" / "Working_Audio" / "two.wav").read_bytes(), b"two")
+            self.assertEqual((originals / "one.wav").read_bytes(), b"one")
+
     def test_reset_targets_renamed_audio_prep_file_by_sha256(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = fixture(Path(tmp))

@@ -26,7 +26,7 @@ def progress_events(stderr: str) -> list[dict[str, object]]:
 class ManagedImportProgressContractTests(unittest.TestCase):
     def test_adapter_uses_engine_counts_and_reserves_completion_for_true_end(self) -> None:
         output = io.StringIO()
-        adapter = api._ImportProgressAdapter("client.files.import.execute", 2)
+        adapter = api._ManagedExecutionProgressAdapter("client.files.import.execute", 2)
 
         with redirect_stderr(output):
             adapter({"phase": "staging", "completed": 0, "total": 2, "active": ["one.wav"]})

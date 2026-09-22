@@ -8,6 +8,7 @@ _CAPABILITIES = [
     "audio.prep.provenance.sha256",
     "audio.prep.reset.execute",
     "audio.prep.reset.plan",
+    "audio.prep.reset.progress",
     "audio.prep.validation.structured",
     "client.create",
     "client.create.context",
