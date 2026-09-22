@@ -188,8 +188,10 @@ When `system-info` advertises `audio.prep.reset.progress`, callers may add
 with `JL_PROGRESS ` contains JSON with operation `audio.prep.reset.execute`,
 phase (`planning`, `staging`, `importing`, `finalizing`, or `complete`),
 `completed`, `total`, `overall_completed`, `overall_total`, and `active` paths.
-The initial planning event has no total. Later events use engine-reported
-source-file counts and monotonically increasing overall steps. The terminal
+Reset uses the selected source-file count from the reviewed plan for the initial
+planning event, then advances it as execute-time plan validation completes.
+Later events use engine-reported source-file counts and monotonically increasing
+overall steps. The terminal
 `complete` event is emitted only after execution and lineage recording return
 successfully. The final stdout response remains authoritative; a failed or
 rolled-back reset never emits the terminal completion event. Without the
