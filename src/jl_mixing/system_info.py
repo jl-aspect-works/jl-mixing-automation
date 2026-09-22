@@ -12,6 +12,8 @@ _CAPABILITIES = [
     "audio.prep.validation.structured",
     "client.create",
     "client.create.context",
+    "client.delete.execute",
+    "client.delete.plan",
     "client.update",
     "client.files.import.execute",
     "client.files.import.plan",

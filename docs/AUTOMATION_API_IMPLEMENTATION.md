@@ -26,6 +26,8 @@ v1.5 advertises:
 
 ```text
 client.create
+client.delete.plan
+client.delete.execute
 delivery.create
 intake.validate
 intake.validate.report

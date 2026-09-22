@@ -23,7 +23,7 @@ class SystemInfoTests(unittest.TestCase):
         self.assertEqual(info["metadata"], {"readable_schema_versions": ["1.1.0"], "writable_schema_version": "1.1.0"})
         self.assertEqual(info["capabilities"], [
             "audio.prep.provenance.sha256", "audio.prep.reset.execute", "audio.prep.reset.plan", "audio.prep.reset.progress",
-            "audio.prep.validation.structured", "client.create", "client.create.context", "client.update",
+            "audio.prep.validation.structured", "client.create", "client.create.context", "client.delete.execute", "client.delete.plan", "client.update",
             "client.files.import.execute", "client.files.import.plan", "client.files.import.progress", "delivery.create",
             "delivery.package.delete", "delivery.package.rebuild", "delivery.status", "intake.validate",
             "intake.validate.incremental", "intake.validate.progress", "intake.validate.report",
