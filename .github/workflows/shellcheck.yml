@@ -1,0 +1,17 @@
+# Enforce warning-level shell portability and safety checks.
+name: ShellCheck
+
+# Run alongside functional tests for pushes and pull requests.
+on:
+  push:
+  pull_request:
+
+jobs:
+  # Ubuntu provides a predictable ShellCheck package for static analysis.
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      # Analyze the exact commit under review.
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: tools/shellcheck-all

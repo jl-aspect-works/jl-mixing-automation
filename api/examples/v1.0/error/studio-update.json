@@ -1,0 +1,15 @@
+{
+  "api_version": "1.0",
+  "operation": "studio.update",
+  "status": "error",
+  "data": {},
+  "warnings": [],
+  "errors": [
+    {
+      "code": "FILESYSTEM_ERROR",
+      "message": "Studio configuration could not be written.",
+      "details": {"exit_code": 1},
+      "retryable": false
+    }
+  ]
+}

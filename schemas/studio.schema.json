@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jlaudio.local/jl-mixing/v1.1/studio.schema.json",
+  "title": "JL Mixing Studio Configuration v1.1",
+  "type": "object",
+  "required": [
+    "metadata",
+    "studio_id",
+    "studio_name",
+    "root_path",
+    "defaults",
+    "cli"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": [
+        "schema",
+        "schema_version",
+        "document_id",
+        "created_with",
+        "created_at",
+        "last_modified_at"
+      ],
+      "properties": {
+        "schema": {
+          "const": "mixing-studio"
+        },
+        "schema_version": {
+          "const": "1.1.0"
+        },
+        "document_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "created_with": {
+          "type": "string",
+          "pattern": "^jl-mixing [0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_modified_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "studio_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "studio_name": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "root_path": {
+      "type": "string",
+      "pattern": "^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/]+[\\\\/][^\\\\/]+)"
+    },
+    "defaults": {
+      "type": "object",
+      "required": [
+        "mix_engineer",
+        "audio",
+        "delivery"
+      ],
+      "properties": {
+        "mix_engineer": {
+          "type": "string"
+        },
+        "audio": {
+          "type": "object",
+          "required": [
+            "sample_rate",
+            "bit_depth",
+            "file_format"
+          ],
+          "properties": {
+            "sample_rate": {
+              "type": "integer",
+              "enum": [
+                44100,
+                48000,
+                88200,
+                96000,
+                176400,
+                192000
+              ]
+            },
+            "bit_depth": {
+              "type": "integer",
+              "enum": [
+                16,
+                24,
+                32
+              ]
+            },
+            "file_format": {
+              "type": "string",
+              "enum": [
+                "WAV",
+                "AIFF"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "delivery": {
+          "type": "object",
+          "required": [
+            "method",
+            "requested_deliverables"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "requested_deliverables": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "main_mix",
+                  "instrumental",
+                  "acapella",
+                  "tv_mix",
+                  "performance_mix",
+                  "stems",
+                  "master"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "cli": {
+      "type": "object",
+      "required": [
+        "change_directory_after_create"
+      ],
+      "properties": {
+        "change_directory_after_create": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

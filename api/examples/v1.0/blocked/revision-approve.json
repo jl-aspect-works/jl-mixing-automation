@@ -1,0 +1,13 @@
+{
+  "api_version": "1.0",
+  "operation": "revision.approve",
+  "status": "blocked",
+  "data": {},
+  "warnings": [],
+  "errors": [{
+    "code": "REVISION_ALREADY_APPROVED",
+    "message": "Revision 1 is already the approved revision.",
+    "details": {"exit_code": 5},
+    "retryable": false
+  }]
+}

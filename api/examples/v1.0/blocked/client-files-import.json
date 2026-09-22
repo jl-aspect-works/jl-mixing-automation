@@ -1,0 +1,8 @@
+{
+  "api_version":"1.0",
+  "operation":"client.files.import.plan",
+  "status":"blocked",
+  "data":{},
+  "warnings":[],
+  "errors":[{"code":"UNSAFE_OPERATION","message":"Unsafe relative path: ../escape.wav","details":{"exit_code":6},"retryable":false}]
+}

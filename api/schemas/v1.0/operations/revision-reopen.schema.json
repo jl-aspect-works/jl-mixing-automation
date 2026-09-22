@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/revision-reopen.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "revision.reopen"},
+    "status": {"enum": ["success", "planned", "blocked", "error"]},
+    "data": {"$ref": "#/$defs/data"},
+    "warnings": {"type": "array"},
+    "errors": {"type": "array"}
+  },
+  "$defs": {
+    "data": {
+      "type": "object", "additionalProperties": true,
+      "properties": {
+        "project": {"type": "object", "required": ["id", "path"], "properties": {"id": {"type": "string"}, "path": {"type": "string", "minLength": 1}}},
+        "workspace_path": {"type": "string", "minLength": 1},
+        "manifest_path": {"type": "string", "minLength": 1},
+        "revision": {"type": "object", "required": ["number", "path", "lifecycle"], "properties": {"number": {"type": "integer", "minimum": 1}, "path": {"type": "string", "minLength": 1}, "lifecycle": {"const": "open"}}},
+        "state": {"type": "object", "required": ["current_revision", "approved_revision", "delivered_revision"], "properties": {"current_revision": {"type": "integer", "minimum": 0}, "approved_revision": {"type": ["integer", "null"], "minimum": 1}, "delivered_revision": {"type": ["integer", "null"], "minimum": 1}}},
+        "would_update": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

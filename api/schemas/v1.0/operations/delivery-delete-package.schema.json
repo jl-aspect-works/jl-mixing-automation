@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/delivery-delete-package.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "delivery.delete-package"},
+    "status": {"enum": ["success", "blocked", "error"]},
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "deleted_name": {"type": "string"},
+        "deleted_path": {"type": "string"},
+        "delivery": {"type": "object"}
+      }
+    },
+    "warnings": {"type": "array"},
+    "errors": {"type": "array"}
+  }
+}

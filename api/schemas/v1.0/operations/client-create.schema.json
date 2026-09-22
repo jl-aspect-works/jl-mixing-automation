@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/client-create.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "client.create"},
+    "status": {"enum": ["success", "planned", "blocked", "error"]},
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "client": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["id", "path"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1}
+          }
+        },
+        "configuration_path": {"type": "string", "minLength": 1},
+        "workspace_path": {"type": "string", "minLength": 1},
+        "would_create": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["code", "message", "details"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+          "message": {"type": "string", "minLength": 1},
+          "details": {"type": "object"}
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["code", "message", "details", "retryable"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+          "message": {"type": "string", "minLength": 1},
+          "details": {"type": "object"},
+          "retryable": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

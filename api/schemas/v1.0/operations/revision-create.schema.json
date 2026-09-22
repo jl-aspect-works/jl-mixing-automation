@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/revision-create.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "revision.create"},
+    "status": {"enum": ["success", "planned", "blocked", "error"]},
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "project": {
+          "type": "object",
+          "required": ["id", "path"],
+          "properties": {
+            "id": {"type": "string"},
+            "path": {"type": "string", "minLength": 1}
+          }
+        },
+        "manifest_path": {"type": "string", "minLength": 1},
+        "revision": {
+          "type": "object",
+          "required": ["number", "path"],
+          "properties": {
+            "number": {"type": "integer", "minimum": 1},
+            "path": {"type": "string", "minLength": 1}
+          }
+        },
+        "revision_notes_path": {"type": "string", "minLength": 1},
+        "workspace_path": {"type": "string", "minLength": 1},
+        "would_create": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "would_update": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "warnings": {"type": "array"},
+    "errors": {"type": "array"}
+  }
+}

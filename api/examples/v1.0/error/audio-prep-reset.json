@@ -1,0 +1,8 @@
+{
+  "api_version":"1.0",
+  "operation":"audio.prep.reset.execute",
+  "status":"error",
+  "data":{},
+  "warnings":[],
+  "errors":[{"code":"FILESYSTEM_ERROR","message":"Unable to write managed Audio Prep file.","details":{"exit_code":1},"retryable":false}]
+}

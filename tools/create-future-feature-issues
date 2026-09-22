@@ -1,0 +1,388 @@
+#!/usr/bin/env bash
+# create-future-feature-issues.sh
+#
+# Creates the current JL Mixing Automation future-feature backlog as GitHub
+# issues. The backlog is intentionally version-independent.
+#
+# The script is idempotent by exact issue title: if an issue with the same
+# title already exists (open or closed), it is skipped.
+#
+# Requirements:
+#   - GitHub CLI (`gh`) installed
+#   - `gh auth login` completed for an account with issue-write access
+#
+# Usage:
+#   ./create-future-feature-issues.sh
+#   ./create-future-feature-issues.sh --dry-run
+#   ./create-future-feature-issues.sh --repo OWNER/REPOSITORY
+
+set -euo pipefail
+
+REPO="JLAudio/jl-mixing"
+DRY_RUN=0
+LABEL="future-feature"
+
+usage() {
+    cat <<'EOF'
+Usage: create-future-feature-issues.sh [options]
+
+Options:
+  --repo OWNER/REPO  Target repository. Default: JLAudio/jl-mixing
+  --dry-run          Show which issues would be created without changing GitHub
+  -h, --help         Show this help
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --repo)
+            if [ "$#" -lt 2 ]; then
+                echo "Error: --repo requires OWNER/REPO." >&2
+                exit 2
+            fi
+            REPO="$2"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown option: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+if ! command -v gh >/dev/null 2>&1; then
+    echo "Error: GitHub CLI 'gh' is not installed." >&2
+    echo "Install it, then run: gh auth login" >&2
+    exit 1
+fi
+
+# Confirm authentication and repository access before creating anything.
+gh auth status >/dev/null
+gh repo view "$REPO" >/dev/null
+
+if [ "$DRY_RUN" -eq 0 ]; then
+    # Create/update one project-specific backlog label. The operation is safe to
+    # rerun because --force updates an existing label instead of failing.
+    gh label create "$LABEL" \
+        --repo "$REPO" \
+        --description "Approved future work not yet assigned to a release" \
+        --color "5319E7" \
+        --force >/dev/null
+fi
+
+issue_exists() {
+    title="$1"
+
+    # Compare exact titles across open and closed issues. Closed issues count as
+    # existing so a rerun does not recreate old work.
+    gh issue list \
+        --repo "$REPO" \
+        --state all \
+        --limit 500 \
+        --json title \
+        --jq '.[].title' |
+        grep -Fqx "$title"
+}
+
+create_issue() {
+    title="$1"
+    body_file="$(mktemp "${TMPDIR:-/tmp}/jl-mixing-issue.XXXXXX")"
+
+    # The caller supplies Markdown through stdin. A temporary file avoids shell
+    # quoting problems and lets gh read the issue body with --body-file.
+    cat >"$body_file"
+
+    if issue_exists "$title"; then
+        echo "[SKIP] $title"
+        rm -f "$body_file"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[DRY RUN] $title"
+        rm -f "$body_file"
+        return 0
+    fi
+
+    issue_url="$(
+        gh issue create \
+            --repo "$REPO" \
+            --title "$title" \
+            --body-file "$body_file" \
+            --label "$LABEL"
+    )"
+
+    echo "[CREATED] $title"
+    echo "          $issue_url"
+    rm -f "$body_file"
+}
+
+create_issue "Add a self-extracting installer" <<'EOF'
+## Summary
+
+Provide a more convenient installation option that can be downloaded and run as
+one executable file, without requiring the user to manually extract a tarball
+and then run `install.sh`.
+
+## Goals
+
+- Preserve the current per-user installation locations:
+  - `~/.local/share/jl-mixing/`
+  - `~/.local/bin/`
+- Reuse the existing transactional installation logic.
+- Create the private Python virtual environment automatically.
+- Install the pinned JSON Schema dependency automatically.
+- Preserve existing studio workspaces during upgrades.
+- Continue providing the normal `.tar.gz` archive as a transparent fallback.
+- Produce a checksum and inventory for the self-extracting package.
+
+## Design considerations
+
+- The installer should remain inspectable and support a verification or
+  extraction-only mode.
+- Evaluate macOS Gatekeeper behavior and unsigned-script warnings.
+- macOS and Linux may require different wrappers.
+- The package must not require Git or administrator privileges.
+
+## Acceptance direction
+
+A user should be able to download one file, make it executable if necessary,
+run it, and then use `new-studio` without manually managing package contents.
+EOF
+
+create_issue "Expand validate-intake with Phase 1 audio QC" <<'EOF'
+## Summary
+
+Build out `validate-intake` into a practical, non-destructive audio intake
+quality-control command. This issue represents the approved Phase 1 scope.
+
+## Required checks
+
+- Extract audio metadata with `ffprobe`.
+- Perform a full-file decode integrity check with `ffmpeg`.
+- Detect exact duplicate files using SHA-256.
+- Compare each file with project expectations:
+  - sample rate
+  - bit depth
+  - file format
+- Report channel counts.
+- Detect exact dual-mono stereo files whose left and right channels are
+  sample-for-sample identical.
+- Report unsupported, malformed, truncated, corrupt, or unreadable files.
+
+## Reporting
+
+Use these severity levels:
+
+- `PASS`
+- `INFO`
+- `WARNING`
+- `ERROR`
+- `SKIPPED`
+
+Expand the managed section of `Intake_Report.md` to include:
+
+- Intake Summary
+- Critical Errors
+- Duplicate Files
+- Project Format Mismatches
+- Channel Configuration Warnings
+- File Inventory
+- Skipped Checks
+- Preparation Recommendations
+
+## Safety invariant
+
+The command must never rename, move, convert, repair, overwrite, or delete files
+inside:
+
+```text
+01_Client_Files/Original_Delivery/
+```
+
+It analyzes and reports only.
+
+## Deferred from this issue
+
+- Near-dual-mono detection
+- Audio-content duplicate detection when metadata differs
+- Digital clipping or intersample-peak analysis
+- DC-offset analysis
+- Leading/trailing silence analysis
+- File-alignment comparison
+- Polarity or phase-correlation warnings
+- Automatic conversion or repair
+EOF
+
+create_issue "Simplify client project storage by removing Active and Completed folders" <<'EOF'
+## Summary
+
+Simplify the client project layout by removing the `Active/` and `Completed/`
+directory layer.
+
+Current layout:
+
+```text
+Clients/<Client>/Projects/
+├── Active/
+└── Completed/
+```
+
+Proposed layout:
+
+```text
+Clients/<Client>/Projects/<Project Name>/
+```
+
+Project completion would remain a metadata state rather than causing a
+filesystem move.
+
+## Motivation
+
+- The active/completed distinction adds navigation complexity.
+- Moving a project at completion changes its path and can make external
+  references less stable.
+- A future archive feature is a better mechanism for cleaning up old projects.
+
+## Required design work
+
+- Update `new-client`, `new-mix`, `complete-project`, context detection, tests,
+  templates, documentation, and schemas as needed.
+- Define how existing v1.0 workspaces are discovered and migrated.
+- Preserve completed-state metadata.
+- Ensure project names cannot collide.
+- Verify that DAW and external-file references remain valid.
+
+## Compatibility requirement
+
+Existing v1.0 project layouts must remain readable. Migration must be explicit,
+safe, tested, and non-destructive.
+EOF
+
+create_issue "Add an explicit project archive workflow" <<'EOF'
+## Summary
+
+Add an archive feature that handles long-term cleanup independently of project
+completion.
+
+Completion should describe workflow state. Archiving should describe storage
+location and operational availability.
+
+## Design questions
+
+- Should archives remain under each client or move to a studio-wide archive?
+- Should archived projects remain directly accessible to normal commands?
+- Should archive creation support compression?
+- How should external files and DAW dependencies be verified before archiving?
+- How should restoration work?
+- Should archive manifests or checksums be generated?
+
+## Safety requirements
+
+- Archiving must never silently delete a project.
+- The operation should support `--dry-run`.
+- Destination collisions must be rejected.
+- Archive and restore operations should be transactional where practical.
+- Project history and stable identifiers must be preserved.
+
+## Dependency
+
+Coordinate this design with the proposed removal of `Projects/Active/` and
+`Projects/Completed/`.
+EOF
+
+create_issue "Reevaluate completed-project reactivation after project-layout simplification" <<'EOF'
+## Summary
+
+Reevaluate whether a dedicated project-reactivation command is still needed
+after projects are stored directly under `Clients/<Client>/Projects/`.
+
+Under the current layout, reactivation would move a project from `Completed/`
+back to `Active/`. Under the proposed simplified layout, it may only require a
+controlled metadata state transition.
+
+## Possible behavior
+
+A command such as:
+
+```bash
+reactivate-project
+```
+
+could:
+
+- Change project status from `completed` to `active`.
+- Preserve approval, delivery, revision, and prior completion history.
+- Record who reactivated the project and when.
+- Update `metadata.last_modified_at`.
+- Support project context detection, explicit `--project`, `--dry-run`, and
+  non-interactive operation.
+
+## Required decision
+
+Define an audit model before implementation. Do not erase the previous
+completion timestamp if doing so would lose useful project history.
+
+## Dependency
+
+Design this after the project-directory simplification and archive workflows
+are settled.
+EOF
+
+create_issue "Use DAW-native template and preset management" <<'EOF'
+## Summary
+
+Reconsider and likely remove the application-managed top-level `DAWs/` folder
+for templates and presets.
+
+Current JL Mixing structure includes resources such as:
+
+```text
+DAWs/
+└── Logic Pro/
+    ├── Mix Templates/
+    └── Presets/
+```
+
+Logic Pro works more reliably when templates and presets remain in its native
+locations under:
+
+```text
+~/Music/Audio Music Apps/
+```
+
+Other DAWs also have preferred native resource locations.
+
+## Proposed direction
+
+- Let each DAW manage templates and presets natively.
+- Remove or stop creating the JL Mixing `DAWs/` directory.
+- Store only a template name, identifier, or reference in JL Mixing metadata
+  when useful.
+- Do not copy, relocate, or own DAW preset libraries.
+- Document how users select the corresponding native DAW template.
+
+## Required design work
+
+- Update `new-studio`, `new-mix`, configuration, templates, documentation, and
+  tests.
+- Define what `daw.template` means when the file is DAW-managed.
+- Ensure missing or renamed native templates produce clear warnings.
+- Preserve compatibility with v1.0 studio configurations containing `DAWs/`.
+EOF
+
+echo
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "Dry run complete. No GitHub issues were created."
+else
+    echo "Future-feature issue creation complete."
+fi

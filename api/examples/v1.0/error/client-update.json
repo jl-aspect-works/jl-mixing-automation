@@ -1,0 +1,1 @@
+{"api_version":"1.0","operation":"client.update","status":"error","data":{},"warnings":[],"errors":[{"code":"FILESYSTEM_ERROR","message":"Client profile could not be written.","details":{"exit_code":1},"retryable":false}]}

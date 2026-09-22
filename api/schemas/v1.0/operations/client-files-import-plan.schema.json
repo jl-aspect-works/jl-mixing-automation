@@ -1,0 +1,20 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/client-files-import-plan.schema.json",
+  "type":"object","additionalProperties":true,
+  "required":["api_version","operation","status","data","warnings","errors"],
+  "properties":{
+    "api_version":{"const":"1.0"},"operation":{"const":"client.files.import.plan"},
+    "status":{"enum":["planned","blocked","error"]},
+    "data":{"type":"object","additionalProperties":true,"properties":{
+      "project":{"type":"object","additionalProperties":true},
+      "plan":{"type":"object","additionalProperties":true,"required":["operation","source_kind","sources","plan_id","files","items"],"properties":{
+        "operation":{"const":"client.files.import"},"source_kind":{"enum":["zip","folder","files"]},
+        "sources":{"type":"array","minItems":1,"items":{"type":"string","minLength":1}},
+        "plan_id":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+        "files":{"type":"array","minItems":1,"items":{"type":"object"}},
+        "items":{"type":"array","minItems":2,"items":{"type":"object","required":["id","area","source_relative_path","destination_relative_path","action","conflict","destination_state","size_bytes"]}}
+      }}
+    }},"warnings":{"type":"array"},"errors":{"type":"array"}
+  }
+}

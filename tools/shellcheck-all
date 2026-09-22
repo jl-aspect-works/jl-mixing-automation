@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Run ShellCheck only on files whose extension or shebang identifies shell code.
+# Python utilities in tools/ are deliberately excluded.
+set -eu
+
+# Local development may omit ShellCheck; CI installs it and therefore enforces warnings.
+if ! command -v shellcheck >/dev/null 2>&1; then
+    echo "ShellCheck is not installed; skipping."
+    exit 0
+fi
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+# Run ShellCheck only when a path is a shell file by extension or shebang.
+check_file() {
+    local file first_line
+    file="$1"
+
+    # Extension-bearing shell files are unambiguous.
+    case "$file" in
+        *.sh)
+            shellcheck --severity=warning "$file"
+            return 0
+            ;;
+    esac
+
+    # Extensionless commands are included only when their shebang names sh or bash.
+    first_line="$(sed -n '1p' "$file")"
+    case "$first_line" in
+        '#!'*'/sh'|'#!'*'/bash'|'#!'*'env sh'|'#!'*'env bash')
+            shellcheck --severity=warning "$file"
+            ;;
+    esac
+}
+
+# Check top-level installers plus all source, command, tool, and test files.
+for file in install.sh uninstall.sh; do
+    [ -f "$file" ] && check_file "$file"
+done
+
+find bin lib tools tests -type f -print |
+while IFS= read -r file; do
+    check_file "$file"
+done

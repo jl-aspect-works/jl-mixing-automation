@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jl-mixing"
+dynamic = ["version"]
+description = "Cross-platform JL Mixing Automation runtime"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+
+[project.scripts]
+jl-mixing-python = "jl_mixing.cli:main"
+new-studio-python = "jl_mixing.new_studio_cli:main"
+validate-intake-python = "jl_mixing.validate_intake_cli:main"
+new-client-python = "jl_mixing.new_client_cli:main"
+new-mix-python = "jl_mixing.new_mix_cli:main"
+new-revision-python = "jl_mixing.new_revision_cli:main"
+approve-mix-python = "jl_mixing.approve_mix_cli:main"
+create-delivery-python = "jl_mixing.create_delivery_cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}

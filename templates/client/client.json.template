@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "schema": "mixing-client",
+    "schema_version": "1.1.0",
+    "document_id": "{{DOCUMENT_ID}}",
+    "created_with": "jl-mixing {{SOFTWARE_VERSION}}",
+    "created_at": "{{CREATED_AT}}",
+    "last_modified_at": "{{CREATED_AT}}"
+  },
+  "client_id": "{{CLIENT_ID}}",
+  "client_name": "{{CLIENT_NAME}}",
+  "defaults": {
+    "artist": "{{DEFAULT_ARTIST}}",
+    "audio": {
+      "sample_rate": 48000,
+      "bit_depth": 24,
+      "file_format": "WAV"
+    },
+    "delivery": {
+      "method": "{{DELIVERY_METHOD}}",
+      "requested_deliverables": [
+        "main_mix",
+        "instrumental"
+      ]
+    }
+  }
+}

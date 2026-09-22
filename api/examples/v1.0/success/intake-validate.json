@@ -1,0 +1,15 @@
+{
+  "api_version": "1.0",
+  "operation": "intake.validate",
+  "status": "success",
+  "data": {
+    "project": {"id": "example-project", "path": "/Mixes/Clients/Example/Projects/Example Project"},
+    "manifest_path": "/Mixes/Clients/Example/Projects/Example Project/00_Admin/project-manifest.json",
+    "intake_report_path": "/Mixes/Clients/Example/Projects/Example Project/00_Admin/Intake_Report.md",
+    "workspace_path": "/Mixes",
+    "source_path": "/Mixes/Clients/Example/Projects/Example Project/01_Client_Files/Original_Delivery",
+    "summary": {"files_discovered": 4, "blocking_errors": 0, "warnings": 1, "ffprobe_available": true}
+  },
+  "warnings": [],
+  "errors": []
+}

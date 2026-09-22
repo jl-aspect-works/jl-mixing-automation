@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/response-envelope.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"type": "string", "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$"},
+    "status": {"enum": ["success", "planned", "blocked", "error"]},
+    "data": {"type": "object"},
+    "warnings": {"type": "array", "items": {"$ref": "warning.schema.json"}},
+    "errors": {"type": "array", "items": {"$ref": "error.schema.json"}}
+  }
+}

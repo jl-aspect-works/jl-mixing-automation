@@ -1,0 +1,11 @@
+{
+  "api_version":"1.0",
+  "operation":"audio.prep.reset.execute",
+  "status":"success",
+  "data":{
+    "project":{"path":"/Mixes/Clients/Acme/Projects/Song","workspace_path":"/Mixes"},
+    "plan_id":"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    "result":{"items":[{"id":"audio:0","result":"replaced"}],"invalidations":["00_Admin/audio-prep-validation-cache.json"]}
+  },
+  "warnings":[],"errors":[]
+}

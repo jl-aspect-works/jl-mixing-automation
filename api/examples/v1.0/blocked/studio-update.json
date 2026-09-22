@@ -1,0 +1,15 @@
+{
+  "api_version": "1.0",
+  "operation": "studio.update",
+  "status": "blocked",
+  "data": {},
+  "warnings": [],
+  "errors": [
+    {
+      "code": "VALIDATION_FAILED",
+      "message": "Unsupported expected sample rate: 12345",
+      "details": {"exit_code": 5},
+      "retryable": false
+    }
+  ]
+}

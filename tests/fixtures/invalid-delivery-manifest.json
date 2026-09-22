@@ -1,0 +1,51 @@
+{
+  "metadata": {
+    "schema": "mixing-delivery",
+    "schema_version": "1.1.0",
+    "document_id": "66666666-6666-4666-8666-666666666666",
+    "created_with": "jl-mixing 1.1.0",
+    "created_at": "2026-07-20T15:30:00-04:00"
+  },
+  "project": {
+    "project_document_id": "44444444-4444-4444-8444-444444444444",
+    "project_id": "blue-sky",
+    "project_name": "Blue Sky"
+  },
+  "client": {
+    "client_document_id": "22222222-2222-4222-8222-222222222222",
+    "client_id": "acme"
+  },
+  "revision": {
+    "number": 3,
+    "revision_id": "55555555-5555-4555-8555-555555555553",
+    "description": "Final vocal balance",
+    "approval": {
+      "approved_at": "2026-07-20T14:00:00-04:00",
+      "approved_by": "Client"
+    }
+  },
+  "delivery": {
+    "method": "Cloud transfer"
+  },
+  "files": [
+    {
+      "path": "Blue Sky Main Mix.wav",
+      "deliverable_type": "main_mix",
+      "size_bytes": 104857600,
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    {
+      "path": "BlueSky_NoVox.wav",
+      "deliverable_type": "unclassified",
+      "size_bytes": 101234567,
+      "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    },
+    {
+      "path": "Stems/Blue Sky Stem Drums.wav",
+      "deliverable_type": "stems",
+      "size_bytes": 53428800,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "approved_revision": 3
+}

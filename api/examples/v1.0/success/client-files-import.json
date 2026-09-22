@@ -1,0 +1,14 @@
+{
+  "api_version":"1.0",
+  "operation":"client.files.import.execute",
+  "status":"success",
+  "data":{
+    "project":{"path":"/Mixes/Clients/Acme/Projects/Song","workspace_path":"/Mixes"},
+    "plan_id":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "result":{
+      "items":[{"id":"original:0","result":"created"},{"id":"audio:0","result":"created"}],
+      "invalidations":["00_Admin/intake-validation-cache.json","00_Admin/audio-prep-validation-cache.json"]
+    }
+  },
+  "warnings":[],"errors":[]
+}

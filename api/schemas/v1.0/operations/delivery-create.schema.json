@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/delivery-create.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "delivery.create"},
+    "status": {"enum": ["success", "planned", "blocked", "error"]},
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "project": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "path": {"type": "string"}
+          }
+        },
+        "manifest_path": {"type": "string"},
+        "delivery_path": {"type": "string"},
+        "delivery_notes_path": {"type": "string"},
+        "delivery_manifest_path": {"type": "string"},
+        "revision": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "number": {"type": "integer", "minimum": 1},
+            "path": {"type": "string"}
+          }
+        },
+        "current_revision": {"type": "integer", "minimum": 1},
+        "approved_revision": {"type": "integer", "minimum": 1},
+        "delivered_revision": {"type": ["integer", "null"], "minimum": 1},
+        "delivery_method": {"type": "string"},
+        "workspace_path": {"type": "string"},
+        "replacement_mode": {"enum": ["default", "overwrite", "clean"]},
+        "zip_requested": {"type": "boolean"},
+        "zip_name": {"type": ["string", "null"]},
+        "zip_path": {"type": "string"},
+        "files_delivered": {"type": "integer", "minimum": 0},
+        "selected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["source_name", "deliverable_type", "path"],
+            "properties": {
+              "source_name": {"type": "string"},
+              "deliverable_type": {"type": "string"},
+              "path": {"type": "string"}
+            }
+          }
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["name", "reason"],
+            "properties": {
+              "name": {"type": "string"},
+              "reason": {"type": "string"}
+            }
+          }
+        },
+        "deletions": {"type": "array", "items": {"type": "string"}},
+        "would_update": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "warnings": {"type": "array"},
+    "errors": {"type": "array"}
+  }
+}

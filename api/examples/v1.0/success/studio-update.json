@@ -1,0 +1,23 @@
+{
+  "api_version": "1.0",
+  "operation": "studio.update",
+  "status": "success",
+  "data": {
+    "studio": {
+      "id": "mixing-studio",
+      "path": "/Users/example/Music/Mixes",
+      "configuration_path": "/Users/example/Music/Mixes/Studio/studio.json"
+    },
+    "changed_fields": ["studio_name", "defaults.audio.sample_rate"],
+    "editable": {
+      "studio_name": "JL Mixing Studio",
+      "mix_engineer": "Mix Engineer",
+      "audio": {"sample_rate": 96000, "bit_depth": 24, "file_format": "WAV"},
+      "delivery": {"method": "Cloud transfer", "requested_deliverables": ["main_mix", "instrumental"]}
+    },
+    "last_modified_at": "2030-01-01T13:00:00Z",
+    "changed": true
+  },
+  "warnings": [],
+  "errors": []
+}

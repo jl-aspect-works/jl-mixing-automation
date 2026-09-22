@@ -1,0 +1,18 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/project-update.schema.json",
+  "type":"object","additionalProperties":true,
+  "required":["api_version","operation","status","data","warnings","errors"],
+  "properties":{
+    "api_version":{"const":"1.0"},"operation":{"const":"project.update"},
+    "status":{"enum":["success","planned","blocked","error"]},
+    "data":{"type":"object","additionalProperties":true,"properties":{
+      "project":{"type":"object","required":["id","path","manifest_path"]},
+      "workspace_path":{"type":"string","minLength":1},
+      "changed_fields":{"type":"array","items":{"type":"string"},"uniqueItems":true},
+      "invalidations":{"type":"array","items":{"type":"string"},"uniqueItems":true},
+      "editable":{"type":"object"},"last_modified_at":{"type":"string"},"changed":{"type":"boolean"},
+      "would_update":{"type":"array","items":{"type":"string","minLength":1}}
+    }},"warnings":{"type":"array"},"errors":{"type":"array"}
+  }
+}

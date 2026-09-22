@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jlaudio.local/jl-mixing/v1.1/delivery-manifest.schema.json",
+  "title": "JL Mixing Delivery Manifest v1.1",
+  "type": "object",
+  "required": [
+    "metadata",
+    "project",
+    "client",
+    "revision",
+    "delivery",
+    "files"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": [
+        "schema",
+        "schema_version",
+        "document_id",
+        "created_with",
+        "created_at"
+      ],
+      "properties": {
+        "schema": {
+          "const": "mixing-delivery"
+        },
+        "schema_version": {
+          "const": "1.1.0"
+        },
+        "document_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "created_with": {
+          "type": "string",
+          "pattern": "^jl-mixing [0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "project_document_id",
+        "project_id",
+        "project_name"
+      ],
+      "properties": {
+        "project_document_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "project_name": {
+          "type": "string",
+          "pattern": "\\S"
+        }
+      },
+      "additionalProperties": false
+    },
+    "client": {
+      "type": "object",
+      "required": [
+        "client_document_id",
+        "client_id"
+      ],
+      "properties": {
+        "client_document_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "client_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "revision": {
+      "type": "object",
+      "required": [
+        "number",
+        "revision_id",
+        "description",
+        "approval"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "revision_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "approval": {
+          "type": "object",
+          "required": [
+            "approved_at",
+            "approved_by"
+          ],
+          "properties": {
+            "approved_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "approved_by": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "delivery": {
+      "type": "object",
+      "required": [
+        "method"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "\\S"
+        }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "deliverable_type",
+          "size_bytes",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+$"
+          },
+          "source_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+$"
+          },
+          "deliverable_type": {
+            "type": "string",
+            "enum": [
+              "stems",
+              "instrumental",
+              "acapella",
+              "tv_mix",
+              "performance_mix",
+              "master",
+              "main_mix",
+              "unclassified"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

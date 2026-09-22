@@ -1,0 +1,20 @@
+{
+  "api_version": "1.0",
+  "operation": "intake.validate",
+  "status": "blocked",
+  "data": {
+    "project": {"id": "example-project", "path": "/Mixes/Clients/Example/Projects/Example Project"},
+    "manifest_path": "/Mixes/Clients/Example/Projects/Example Project/00_Admin/project-manifest.json",
+    "intake_report_path": "/Mixes/Clients/Example/Projects/Example Project/00_Admin/Intake_Report.md",
+    "workspace_path": "/Mixes",
+    "source_path": "/Mixes/Clients/Example/Projects/Example Project/01_Client_Files/Original_Delivery",
+    "summary": {"files_discovered": 0, "blocking_errors": 1, "warnings": 0, "ffprobe_available": true}
+  },
+  "warnings": [],
+  "errors": [{
+    "code": "INTAKE_BLOCKING_FINDINGS",
+    "message": "Intake validation completed with blocking findings.",
+    "details": {"exit_code": 5, "blocking_errors": 1},
+    "retryable": false
+  }]
+}

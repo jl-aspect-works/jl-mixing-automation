@@ -132,4 +132,3 @@ class ClientDeleteApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-cee29d4bdc876c179c6278f65eb53a080e91286e

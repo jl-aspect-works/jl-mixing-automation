@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Report required and optional developer/runtime dependencies.
+# This tool is diagnostic only; it never installs or modifies the system.
+set -eu
+
+status=0
+for command_name in bash python3 jq; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+        echo "[OK] $command_name"
+    else
+        echo "[MISSING] $command_name"
+        status=1
+    fi
+done
+
+if command -v python3 >/dev/null 2>&1; then
+    if python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+        echo "[OK] Python version is 3.10 or newer"
+    else
+        echo "[MISSING] Python 3.10 or newer is required"
+        status=1
+    fi
+fi
+
+for command_name in ffprobe shellcheck; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+        echo "[OK] optional: $command_name"
+    else
+        echo "[OPTIONAL] not installed: $command_name"
+    fi
+done
+exit "$status"

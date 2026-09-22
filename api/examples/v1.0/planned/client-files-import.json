@@ -1,0 +1,18 @@
+{
+  "api_version":"1.0",
+  "operation":"client.files.import.plan",
+  "status":"planned",
+  "data":{
+    "project":{"path":"/Mixes/Clients/Acme/Projects/Song","workspace_path":"/Mixes"},
+    "plan":{
+      "operation":"client.files.import","source_kind":"folder","sources":["/Incoming/Client Delivery"],
+      "plan_id":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "files":[{"relative_path":"Stems/Bass.wav","source_path":"/Incoming/Client Delivery/Stems/Bass.wav","zip_member":null,"size":1024,"fingerprint":"file:1024:123456"}],
+      "items":[
+        {"id":"original:0","area":"original_delivery","source_relative_path":"Stems/Bass.wav","destination_relative_path":"01_Client_Files/Original_Delivery/Stems/Bass.wav","action":"create","conflict":false,"destination_state":"missing","size_bytes":1024},
+        {"id":"audio:0","area":"audio_prep","source_relative_path":"Stems/Bass.wav","destination_relative_path":"02_Audio_Preparation/Working_Audio/Stems/Bass.wav","action":"create","conflict":false,"destination_state":"missing","size_bytes":1024,"depends_on":"original:0"}
+      ]
+    }
+  },
+  "warnings":[],"errors":[]
+}

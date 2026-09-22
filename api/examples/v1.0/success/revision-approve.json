@@ -1,0 +1,15 @@
+{
+  "api_version": "1.0",
+  "operation": "revision.approve",
+  "status": "success",
+  "data": {
+    "project": {"id": "example-project", "path": "/Mixes/Clients/Example/Projects/Example Project"},
+    "manifest_path": "/Mixes/Clients/Example/Projects/Example Project/00_Admin/project-manifest.json",
+    "workspace_path": "/Mixes",
+    "revision": {"number": 1, "path": "/Mixes/Clients/Example/Projects/Example Project/04_Revisions/Revision_01"},
+    "approved_by": "Client",
+    "approved_at": "2030-01-01T12:00:00Z"
+  },
+  "warnings": [],
+  "errors": []
+}

@@ -1,0 +1,20 @@
+{
+  "api_version": "1.0",
+  "application": {
+    "name": "jl-mixing",
+    "version": "1.3.1"
+  },
+  "metadata": {
+    "readable_schema_versions": [
+      "1.1.0"
+    ],
+    "writable_schema_version": "1.1.0"
+  },
+  "capabilities": [
+    "system.info"
+  ],
+  "schemas": {
+    "installed_path": "/opt/jl-mixing/api/schemas/v1.0",
+    "public_base_url": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/"
+  }
+}

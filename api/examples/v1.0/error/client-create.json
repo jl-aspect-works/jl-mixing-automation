@@ -1,0 +1,1 @@
+{"api_version":"1.0","data":{},"errors":[{"code":"INVALID_REQUEST","details":{"exit_code":2},"message":"client create requires CLIENT_ID and --json.","retryable":false}],"operation":"client.create","status":"error","warnings":[]}

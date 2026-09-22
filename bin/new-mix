@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# JL Mixing Automation new-mix launcher.
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec bash "$SCRIPT_DIR/jl-mixing-python-command" jl_mixing.new_mix_cli "$@"

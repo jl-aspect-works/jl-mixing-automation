@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/delivery-status.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "delivery.status"},
+    "status": {"enum": ["success", "blocked", "error"]},
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "project": {"type": "object"},
+        "delivery_path": {"type": "string"},
+        "delivery_manifest_path": {"type": "string"},
+        "state": {"enum": ["not_created", "ready", "needs_attention"]},
+        "revisions": {
+          "type": "object",
+          "properties": {
+            "current": {"type": "integer", "minimum": 1},
+            "approved": {"type": ["integer", "null"], "minimum": 1},
+            "delivered": {"type": ["integer", "null"], "minimum": 1},
+            "source": {"type": ["integer", "null"], "minimum": 1}
+          }
+        },
+        "deliverables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["path", "status"],
+            "properties": {
+              "path": {"type": "string"},
+              "deliverable_type": {"type": ["string", "null"]},
+              "size_bytes": {"type": ["integer", "null"], "minimum": 0},
+              "expected_sha256": {"type": ["string", "null"]},
+              "actual_sha256": {"type": ["string", "null"]},
+              "status": {"enum": ["current", "missing", "mismatch", "unsafe", "unavailable"]}
+            }
+          }
+        },
+        "deliverable_count": {"type": "integer", "minimum": 0},
+        "untracked": {"type": "array", "items": {"type": "string"}},
+        "issues": {"type": "array", "items": {"type": "object"}},
+        "notes": {"type": "object"},
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["name", "path", "status", "issues"],
+            "properties": {
+              "name": {"type": "string"},
+              "path": {"type": "string"},
+              "size_bytes": {"type": ["integer", "null"], "minimum": 0},
+              "modified_at": {"type": ["string", "null"]},
+              "status": {"enum": ["current", "stale", "invalid", "unsafe"]},
+              "issues": {"type": "array", "items": {"type": "object"}}
+            }
+          }
+        },
+        "package_state": {"enum": ["none", "current", "stale", "attention"]},
+        "current_package": {"type": ["object", "null"]}
+      }
+    },
+    "warnings": {"type": "array"},
+    "errors": {"type": "array"}
+  }
+}

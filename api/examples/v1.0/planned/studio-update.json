@@ -1,0 +1,15 @@
+{
+  "api_version": "1.0",
+  "operation": "studio.update",
+  "status": "planned",
+  "data": {
+    "studio": {"id": "mixing-studio", "path": "/Users/example/Music/Mixes", "configuration_path": "/Users/example/Music/Mixes/Studio/studio.json"},
+    "changed_fields": ["studio_name"],
+    "editable": {"studio_name": "Planned Studio", "mix_engineer": "Mix Engineer", "audio": {"sample_rate": 48000, "bit_depth": 24, "file_format": "WAV"}, "delivery": {"method": "Cloud transfer", "requested_deliverables": ["main_mix", "instrumental"]}},
+    "last_modified_at": "2030-01-01T12:00:00Z",
+    "changed": true,
+    "would_update": ["/Users/example/Music/Mixes/Studio/studio.json"]
+  },
+  "warnings": [],
+  "errors": []
+}
