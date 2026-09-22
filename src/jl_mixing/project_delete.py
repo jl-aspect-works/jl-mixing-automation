@@ -142,8 +142,6 @@ def plan_project_delete(workspace: Path, client_id: str, project_id: str) -> Pro
     workspace = workspace.expanduser().absolute()
     if not workspace.exists() or not _safe_directory(workspace):
         raise ContextError(f"Workspace is missing or unsafe: {workspace}")
-    if workspace != workspace.resolve(strict=True):
-        raise UnsafeOperationError(f"Workspace path contains a symlink or junction: {workspace}")
     studio = _document(workspace / "Studio" / "studio.json", "mixing-studio")
     if not isinstance(studio.get("studio_id"), str):
         raise ValidationError("Workspace studio identity is invalid.")
