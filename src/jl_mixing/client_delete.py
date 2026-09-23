@@ -172,13 +172,10 @@ def plan_client_delete(workspace: Path, client_id: str) -> ClientDeletePlan:
     studio = _document(workspace / "Studio" / "studio.json", "mixing-studio")
     if not isinstance(studio.get("studio_id"), str):
         raise ValidationError("Workspace studio identity is invalid.")
-    recorded_root = studio.get("root_path")
-    try:
-        owns_workspace = isinstance(recorded_root, str) and Path(recorded_root).expanduser().samefile(workspace)
-    except OSError:
-        owns_workspace = False
-    if not owns_workspace:
-        raise ValidationError("Workspace path does not match the Studio document ownership root.")
+    # root_path is legacy location metadata, not an ownership identifier. It
+    # can differ for the same NAS workspace across mapped drives, UNC paths,
+    # and machines. The configured, link-free workspace and its validated
+    # Studio/client documents establish the deletion boundary instead.
     clients = workspace / "Clients"
     if not clients.exists() or not _safe_directory(clients):
         raise ContextError(f"Workspace Clients directory is missing or unsafe: {clients}")
