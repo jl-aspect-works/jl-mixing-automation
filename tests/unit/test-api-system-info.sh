@@ -24,7 +24,7 @@ assert d['capabilities']==[
 'client.create','client.create.context','client.delete.execute','client.delete.plan','client.update','client.files.import.execute','client.files.import.plan','client.files.import.progress',
 'delivery.create','delivery.package.delete','delivery.package.rebuild','delivery.status','intake.validate',
 'intake.validate.incremental','intake.validate.progress','intake.validate.report','intake.validate.structured',
-'managed.requests.stdinjson','project.create','project.create.artist','project.delete.plan','project.delete.execute','project.update','revision.approve','revision.close','revision.create',
+'managed.requests.stdinjson','project.create','project.create.artist','project.delete.plan','project.delete.execute','project.update','project.update.creativedirection.utf8hex','revision.approve','revision.close','revision.create',
 'revision.create.description','revision.reopen','revision.unapprove','revision.update.description','studio.update','system.info']
 assert Path(d['schemas']['installed_path']).resolve()==(root/'api'/'schemas'/f'v{av}').resolve()
 assert d['schemas']['public_base_url']==f'https://jlaudio.github.io/jl-mixing/api/v{av}/schemas/'

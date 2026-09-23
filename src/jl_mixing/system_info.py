@@ -33,6 +33,7 @@ _CAPABILITIES = [
     "project.delete.plan",
     "project.delete.execute",
     "project.update",
+    "project.update.creativedirection.utf8hex",
     "revision.approve",
     "revision.close",
     "revision.create",
