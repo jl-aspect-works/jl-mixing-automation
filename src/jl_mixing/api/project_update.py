@@ -73,9 +73,18 @@ def _nullable(value: str) -> str | None:
     return None if value.strip().lower() in {"", "null", "none"} else value
 
 
+def _decode_utf8_hex(value: str) -> str:
+    """Decode text transported through shell launchers that cannot safely forward newlines."""
+    try:
+        return bytes.fromhex(value).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ArgumentError("--creative-direction-utf8-hex requires valid hex-encoded UTF-8 text.") from exc
+
+
 def parse_args(args: list[str]) -> ProjectUpdateApiRequest:
     values: dict[str, Any]={"dry_run":False,"bpm_set":False,"deadline_set":False}; json_seen=0; index=0
-    options={"--project","--name","--artist","--album","--producer","--engineer","--bpm","--key","--time-signature","--sample-rate","--bit-depth","--file-format","--delivery-method","--deliverables","--deadline","--creative-direction"}
+    options={"--project","--name","--artist","--album","--producer","--engineer","--bpm","--key","--time-signature","--sample-rate","--bit-depth","--file-format","--delivery-method","--deliverables","--deadline","--creative-direction","--creative-direction-utf8-hex"}
+    creative_direction_option: str | None = None
     while index < len(args):
         arg=args[index]
         if arg=="--json": json_seen+=1
@@ -108,7 +117,11 @@ def parse_args(args: list[str]) -> ProjectUpdateApiRequest:
             elif arg=="--delivery-method": values["delivery_method"]=value
             elif arg=="--deliverables": values["requested_deliverables"]=tuple(part.strip() for part in value.split(","))
             elif arg=="--deadline": values["deadline_set"]=True; values["deadline"]=_nullable(value)
-            else: values["creative_direction"]=value
+            elif arg in {"--creative-direction", "--creative-direction-utf8-hex"}:
+                if creative_direction_option is not None:
+                    raise ArgumentError("project update accepts only one Creative Direction option.")
+                creative_direction_option = arg
+                values["creative_direction"] = value if arg == "--creative-direction" else _decode_utf8_hex(value)
         elif arg.startswith("-"): raise ArgumentError(f"Unknown option: {arg}")
         else: raise ArgumentError(f"Unexpected positional argument: {arg}")
         index+=1

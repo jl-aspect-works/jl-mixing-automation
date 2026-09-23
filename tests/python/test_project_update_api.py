@@ -36,5 +36,28 @@ class ProjectUpdateApiTests(unittest.TestCase):
             p=run(project,'project','update','--json','--artist',''); self.assertEqual(p.returncode,5); self.assertEqual(path.read_bytes(),original)
             p=run(project,'project','update','--json','--name','Rollback',fail_at='after-file-replacement'); self.assertNotEqual(p.returncode,0); self.assertEqual(path.read_bytes(),original)
 
+    def test_transport_safe_creative_direction_preserves_newline_forms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=fixture(Path(tmp)); path=project/'00_Admin'/'project-manifest.json'
+            for value in ('First line\nSecond line', 'Windows first\r\nWindows second', '', 'Single line'):
+                encoded=value.encode('utf-8').hex()
+                p=run(project,'project','update','--json','--creative-direction-utf8-hex',encoded)
+                self.assertEqual(p.returncode,0,p.stderr)
+                payload=json.loads(p.stdout)
+                self.assertEqual(payload['status'],'success')
+                self.assertEqual(payload['data']['editable']['creative_direction'],value)
+                self.assertEqual(json.loads(path.read_text())['creative_direction'],value)
+
+    def test_transport_safe_creative_direction_rejects_invalid_or_ambiguous_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project=fixture(Path(tmp)); path=project/'00_Admin'/'project-manifest.json'; original=path.read_bytes()
+            invalid=run(project,'project','update','--json','--creative-direction-utf8-hex','not-hex')
+            self.assertEqual(invalid.returncode,2)
+            self.assertIn('valid hex-encoded UTF-8 text',json.loads(invalid.stdout)['errors'][0]['message'])
+            ambiguous=run(project,'project','update','--json','--creative-direction','Raw','--creative-direction-utf8-hex','456e636f646564')
+            self.assertEqual(ambiguous.returncode,2)
+            self.assertIn('only one Creative Direction option',json.loads(ambiguous.stdout)['errors'][0]['message'])
+            self.assertEqual(path.read_bytes(),original)
+
 
 if __name__=='__main__': unittest.main()
