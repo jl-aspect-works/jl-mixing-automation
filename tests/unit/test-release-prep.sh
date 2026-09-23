@@ -73,21 +73,25 @@ assert_file_exists "$ROOT/docs/RELEASE_NOTES_V1.5.md"
 assert_file_exists "$ROOT/docs/RELEASE_NOTES_V2.0.md"
 assert_file_exists "$ROOT/docs/RELEASE_NOTES_V2.1.md"
 assert_file_exists "$ROOT/docs/RELEASE_NOTES_V2.2.md"
+release_major="$(cut -d. -f1 "$ROOT/VERSION")"
+release_minor="$(cut -d. -f2 "$ROOT/VERSION")"
+release_notes="docs/RELEASE_NOTES_V${release_major}.${release_minor}.md"
+assert_file_exists "$ROOT/$release_notes"
 assert_file_exists "$ROOT/docs/SCOPE_FREEZE_V1.2.md"
 assert_eq "1.0" "$(sed -n '1p' "$ROOT/API_VERSION")" \
     "Automation API version is independent"
 assert_contains "$(cat "$ROOT/.github/workflows/release.yml")" \
-    'docs/RELEASE_NOTES_V2.2.md' "release workflow publishes v2.2 notes"
+    "$release_notes" "release workflow publishes current release notes"
 assert_contains "$(cat "$ROOT/.github/workflows/release.yml")" \
     'macos-15-intel' "release workflow builds Intel macOS package"
 assert_contains "$(cat "$ROOT/.github/workflows/release.yml")" \
     'macos-arm64' "release workflow labels Apple Silicon package"
 assert_contains "$(cat "$ROOT/docs/INSTALLATION_GUIDE.md")" \
     'xattr -dr com.apple.quarantine .' "installation guide documents unsigned macOS quarantine handling"
-assert_contains "$(cat "$ROOT/docs/RELEASE_NOTES_V2.2.md")" \
-    '/path/to/jl-mixing-<version>' "v2.2 release notes use version-independent quarantine example"
-assert_contains "$(cat "$ROOT/docs/RELEASE_NOTES_V2.2.md")" \
-    'Unblock-File .\windows\install.ps1' "v2.2 release notes document Windows downloaded-script unblock"
+assert_contains "$(cat "$ROOT/$release_notes")" \
+    '/path/to/jl-mixing-<version>' "release notes use version-independent quarantine example"
+assert_contains "$(cat "$ROOT/$release_notes")" \
+    'Unblock-File .\windows\install.ps1' "release notes document Windows downloaded-script unblock"
 assert_contains "$(cat "$ROOT/docs/USER_GUIDE.md")" \
     'create-delivery --clean' "user guide documents destructive clean"
 assert_contains "$(cat "$ROOT/docs/USER_GUIDE.md")" \
