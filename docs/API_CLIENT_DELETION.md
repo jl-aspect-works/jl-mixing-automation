@@ -7,7 +7,7 @@ jl-mixing client delete-plan --json --workspace WORKSPACE --client-id CLIENT_ID
 jl-mixing client delete-execute --json --workspace WORKSPACE --client-id CLIENT_ID --fingerprint PLAN_FINGERPRINT --confirm-name EXACT_CLIENT_NAME
 ```
 
-The caller supplies the configured workspace and stable Client ID, never a client filesystem path. Both operations validate the Studio and client documents, path containment, unique identity, and the complete client directory. Symlinks, junctions, special entries, and nested mounts are rejected.
+The caller supplies the configured workspace and stable Client ID, never a client filesystem path. Both operations validate the Studio and client documents, path containment, unique identity, and the complete client directory. Symlinks, junctions, special entries, and nested mounts are rejected. The legacy absolute `root_path` in `studio.json` is not an ownership check: it can differ when the same workspace is moved or accessed through another machine, mapped drive, or UNC path.
 
 Deletion is allowed only when `Projects` contains no project directory. An unrecognized or malformed directory under `Projects` still blocks deletion so Automation never treats uncertain project content as disposable. Ordinary files directly under `Projects`, and other non-project content within the client directory, are summarized and permanently deleted with the client.
 

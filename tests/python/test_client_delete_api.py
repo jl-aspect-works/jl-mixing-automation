@@ -76,12 +76,29 @@ class ClientDeleteApiTests(unittest.TestCase):
             self.assertNotEqual(status, 0)
             self.assertIn("Multiple", result["errors"][0]["message"])
 
-    def test_workspace_document_must_own_the_selected_root(self) -> None:
+    def test_stale_studio_root_does_not_block_valid_workspace_deletion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workspace, client = self._setup(Path(tmp))
             studio_path = workspace / "Studio" / "studio.json"
             studio = json.loads(studio_path.read_text(encoding="utf-8"))
             studio["root_path"] = str(Path(tmp) / "different-workspace")
+            studio_path.write_text(json.dumps(studio), encoding="utf-8")
+            result, status = execute(ClientDeleteRequest(workspace, "test-client"), plan_only=True)
+            self.assertEqual(status, 0, result)
+            self.assertTrue(client.exists())
+            deleted, deleted_status = execute(
+                ClientDeleteRequest(workspace, "test-client", result["data"]["summary"]["fingerprint"], "Test Client"),
+                plan_only=False,
+            )
+            self.assertEqual(deleted_status, 0, deleted)
+            self.assertFalse(client.exists())
+
+    def test_invalid_studio_document_still_blocks_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace, client = self._setup(Path(tmp))
+            studio_path = workspace / "Studio" / "studio.json"
+            studio = json.loads(studio_path.read_text(encoding="utf-8"))
+            studio["metadata"]["schema"] = "mixing-client"
             studio_path.write_text(json.dumps(studio), encoding="utf-8")
             result, status = execute(ClientDeleteRequest(workspace, "test-client"), plan_only=True)
             self.assertNotEqual(status, 0)
