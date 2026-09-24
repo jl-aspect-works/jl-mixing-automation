@@ -4,6 +4,8 @@
 
 ## Prepare the release
 
+- [ ] For a new release line or patch, prepare and publish a prerelease candidate first. Do not dispatch a stable version until packaged acceptance is recorded for the exact coordinated Automation and Studio candidates.
+- [ ] Confirm the intended `VERSION` has an `-rc.N` suffix for a candidate. For stable, confirm the acceptance record identifies qualified builds, platform results, blocker dispositions, and explicit approval to promote.
 - [ ] Confirm all intended release changes are merged to `main` and no release-blocking PR remains open.
 - [ ] Update `VERSION` to the intended SemVer value (for example `2.1.0-rc.3` or `2.1.0`).
 - [ ] Do not change tests or application code solely to advance the release number.
@@ -24,7 +26,7 @@
 - [ ] Confirm macOS Apple Silicon package succeeds.
 - [ ] Confirm Linux package succeeds.
 - [ ] Confirm all archive checksums and inventories are present.
-- [ ] Confirm the GitHub release is published and is marked prerelease when `VERSION` contains a prerelease suffix.
+- [ ] Confirm the GitHub release is published and marked prerelease for an `-rc.N` `VERSION`. Stop if the tag, version, or prerelease flag differs from the intended dispatch.
 
 ## Coordinated acceptance
 
@@ -32,3 +34,4 @@
 - [ ] Install the appropriate Automation package on macOS and verify the command/runtime surface.
 - [ ] Perform coordinated acceptance with the intended JL Mixing Studio candidate.
 - [ ] Record release-blocking findings as issues/PRs and do not advance to the next RC or stable release until resolved or explicitly deferred.
+- [ ] Before a stable dispatch, verify the exact coordinated candidate packages passed required installed-platform checks, with any deferrals and user approval recorded in the acceptance record.
