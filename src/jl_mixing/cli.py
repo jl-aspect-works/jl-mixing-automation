@@ -33,6 +33,9 @@ from .api.managed_client_files import execute_reset as managed_reset_execute
 from .api.managed_client_files import execute_reset_plan as managed_reset_plan_execute
 from .api.managed_client_files import parse_import_args as parse_managed_import_args
 from .api.managed_client_files import parse_reset_args as parse_managed_reset_args
+from .api.managed_client_file_delete import _error as managed_delete_error
+from .api.managed_client_file_delete import parse_args as parse_managed_delete_args
+from .api.managed_client_file_delete import run as managed_delete_run
 from .api.project_create import _error_envelope as project_error_envelope
 from .api.project_create import execute as project_execute
 from .api.project_create import parse_args as parse_project_args
@@ -181,6 +184,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ArgumentError as exc:
             _emit_json(managed_files_error(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
         payload, status = managed_import_plan_execute(request); _emit_json(payload); return status
+
+    if len(args) >= 2 and args[0:2] in (["client-files", "delete-plan"], ["client-files", "delete-execute"]):
+        plan_only = args[1] == "delete-plan"
+        operation = "client.files.delete.plan" if plan_only else "client.files.delete.execute"
+        try: request = parse_managed_delete_args(args[2:], plan_only=plan_only)
+        except ArgumentError as exc:
+            _emit_json(managed_delete_error(operation, "INVALID_REQUEST", str(exc), exc.exit_code)); return exc.exit_code
+        payload, status = managed_delete_run(request, plan_only=plan_only); _emit_json(payload); return status
 
     if len(args) >= 2 and args[0:2] == ["client-files", "import-execute"]:
         operation = "client.files.import.execute"

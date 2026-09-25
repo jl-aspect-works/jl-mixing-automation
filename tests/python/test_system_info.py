@@ -24,7 +24,8 @@ class SystemInfoTests(unittest.TestCase):
         self.assertEqual(info["capabilities"], [
             "audio.prep.provenance.sha256", "audio.prep.reset.execute", "audio.prep.reset.plan", "audio.prep.reset.progress",
             "audio.prep.validation.structured", "client.create", "client.create.context", "client.delete.execute", "client.delete.plan", "client.update",
-            "client.files.import.execute", "client.files.import.plan", "client.files.import.progress", "delivery.create",
+            "client.files.import.execute", "client.files.import.plan", "client.files.import.progress",
+            "client.files.delete.plan", "client.files.delete.execute", "delivery.create",
             "delivery.package.delete", "delivery.package.rebuild", "delivery.status", "intake.validate",
             "intake.validate.incremental", "intake.validate.progress", "intake.validate.report",
             "intake.validate.structured", "managed.requests.stdinjson", "project.create", "project.create.artist",

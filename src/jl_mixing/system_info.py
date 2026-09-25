@@ -18,6 +18,8 @@ _CAPABILITIES = [
     "client.files.import.execute",
     "client.files.import.plan",
     "client.files.import.progress",
+    "client.files.delete.plan",
+    "client.files.delete.execute",
     "delivery.create",
     "delivery.package.delete",
     "delivery.package.rebuild",

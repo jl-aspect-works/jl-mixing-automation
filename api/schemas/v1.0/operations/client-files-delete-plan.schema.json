@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jlaudio.github.io/jl-mixing/api/v1.0/schemas/operations/client-files-delete-plan.schema.json",
+  "type": "object", "additionalProperties": true,
+  "required": ["api_version", "operation", "status", "data", "warnings", "errors"],
+  "properties": {
+    "api_version": {"const": "1.0"},
+    "operation": {"const": "client.files.delete.plan"},
+    "status": {"enum": ["planned", "blocked", "error"]},
+    "data": {"type": "object", "additionalProperties": true, "properties": {
+      "summary": {"type": "object", "required": ["relative_path", "display_name", "is_directory", "file_count", "directory_count", "total_bytes", "fingerprint", "working_copies_retained"], "properties": {
+        "relative_path": {"type": "string"}, "display_name": {"type": "string"},
+        "is_directory": {"type": "boolean"}, "file_count": {"type": "integer", "minimum": 0},
+        "directory_count": {"type": "integer", "minimum": 0}, "total_bytes": {"type": "integer", "minimum": 0},
+        "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "working_copies_retained": {"type": "array", "items": {"type": "string"}}
+      }},
+      "deleted": {"const": false}, "recoverable": {"const": false}
+    }},
+    "warnings": {"type": "array"}, "errors": {"type": "array"}
+  }
+}
