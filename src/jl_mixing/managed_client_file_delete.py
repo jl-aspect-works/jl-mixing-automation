@@ -66,6 +66,9 @@ def _inventory(path: Path) -> tuple[list[tuple[str, os.stat_result, bool]], int,
 def plan(project: Path, relative_path: str) -> dict[str, object]:
     relative, target = _selected(project, relative_path)
     items, file_count, directory_count, total_bytes = _inventory(target)
+    admin = project / "00_Admin"
+    if admin.is_symlink() or (admin.exists() and not admin.is_dir()):
+        raise UnsafeOperationError("The managed metadata folder is unavailable or unsafe.")
     document = lineage._load(project)  # Raises on malformed or unsafe managed metadata.
     source = relative.removeprefix(ROOT + "/").casefold()
     is_directory = target.is_dir()

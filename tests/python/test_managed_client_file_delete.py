@@ -79,6 +79,19 @@ class ManagedClientFileDeleteTests(unittest.TestCase):
         self.assertTrue(caught.exception.path.exists())
         self.assertFalse(folder.exists())
 
+    def test_rejects_unsafe_metadata_folder_before_deleting_source(self) -> None:
+        original = self.original / "Notes.txt"
+        original.write_text("keep")
+        admin = self.project / "00_Admin"
+        admin.rename(Path(self.temp.name) / "saved-admin")
+        try:
+            admin.symlink_to(Path(self.temp.name), target_is_directory=True)
+        except OSError:
+            self.skipTest("Directory symlinks are unavailable")
+        self.assertRaises(UnsafeOperationError, plan, self.project,
+                          "01_Client_Files/Original_Delivery/Notes.txt")
+        self.assertEqual(original.read_text(), "keep")
+
     @unittest.skipUnless(importlib.util.find_spec("jsonschema"), "CLI validation dependency is unavailable")
     def test_cli_plan_and_execute_use_api_envelopes(self) -> None:
         from jl_mixing.cli import main as cli_main
