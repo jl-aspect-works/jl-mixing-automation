@@ -6,7 +6,7 @@ Automation `v2.3.3-rc.1` is a security and dependency-maintenance release candid
 
 Download the `v2.3.3-rc.1` archive for your platform and verify its accompanying SHA-256 checksum before installing. This candidate is intended to be qualified with Studio `v2.3.3-rc.2`. The release workflow also generates GitHub artifact provenance attestations for the published files.
 
-- Windows: extract `jl-mixing-2.3.2-windows.zip`, then run `.\windows\install.ps1` in PowerShell. If the script is blocked, run `Unblock-File .\windows\install.ps1` first. The package contains a private Python runtime.
+- Windows: extract `jl-mixing-2.3.3-rc.1-windows.zip`, then run `.\windows\install.ps1` in PowerShell. If the script is blocked, run `Unblock-File .\windows\install.ps1` first. The package contains a private Python runtime.
 - Intel Mac: choose the `macos-x86_64` archive. Apple Silicon Mac: choose `macos-arm64`. The packages are unsigned and not notarized. After checksum verification, remove quarantine recursively from the extracted folder with `xattr -dr com.apple.quarantine /path/to/jl-mixing-<version>`, then run `./macos/install.sh` from that folder. The bundled Python runtime requires this step.
 - Linux/source compatibility package: extract and run `./install.sh`. Bash, Python 3.10+ with `venv`, and jq are required.
 
