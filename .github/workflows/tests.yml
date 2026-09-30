@@ -21,6 +21,8 @@ jobs:
           fetch-depth: 0
       - name: Test change-scope classifier
         run: python3 .github/scripts/test_change_scope.py
+      - name: Test immutable release guard
+        run: python3 .github/scripts/test_release_guard.py
       - id: classify
         name: Check changed files and documentation
         env:
