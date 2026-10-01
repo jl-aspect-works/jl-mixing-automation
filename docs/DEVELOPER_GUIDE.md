@@ -82,6 +82,7 @@ release-package checks. CI currently exercises:
 - frozen macOS runtime
 - macOS self-contained installation lifecycle
 - release archive/checksum/inventory verification
+- Python CodeQL security analysis on PRs, `main`, and a weekly schedule; review findings as verification evidence (see [Security Policy](../SECURITY.md#continuous-security-analysis))
 
 A release-affecting change should not merge until the applicable CI matrix is
 green.
