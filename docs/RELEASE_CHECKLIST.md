@@ -18,6 +18,8 @@
 
 ## Build and publish
 
+Release versions are single-use: normal dispatch fails if either `v${VERSION}` or its GitHub Release already exists, even when the tag points to the same commit. The workflow checks before building and again before creating the tag, and stops if GitHub availability cannot be confirmed. Published assets are never updated by the normal release workflow. Corrections require a new version/tag; a failure after tag creation also requires a new version rather than rerunning publication for that tag.
+
 - [ ] From GitHub Actions, run the **Release** workflow on `main`. Do not create the release tag manually.
 - [ ] The workflow must read `VERSION`, build the exact dispatched `main` commit, and create `v${VERSION}` only after all platform builds succeed.
 - [ ] Monitor the workflow through completion. If a job fails, inspect all failed jobs before changing code and rerun only after the complete failure set is understood.
