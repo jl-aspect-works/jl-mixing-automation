@@ -103,10 +103,68 @@ jobs:
         shell: pwsh
         run: ./tests/windows/test-release-package.ps1
 
+  artifact-transfer:
+    name: Artifact transfer smoke test
+    needs: scope
+    if: needs.scope.outputs.full_ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create representative platform assets and checksums
+        run: |
+          set -euo pipefail
+          for platform in linux macos-intel macos-arm64 windows; do
+            mkdir -p "fixture/$platform"
+            printf 'artifact transfer fixture: %s\n' "$platform" > "fixture/$platform/package-$platform.txt"
+            (
+              cd "fixture/$platform"
+              sha256sum "package-$platform.txt" > "package-$platform.sha256"
+            )
+            printf 'package-%s.txt\n' "$platform" > "fixture/$platform/package-$platform.inventory.txt"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transfer-smoke-linux
+          path: fixture/linux/*
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transfer-smoke-macos-intel
+          path: fixture/macos-intel/*
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transfer-smoke-macos-arm64
+          path: fixture/macos-arm64/*
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transfer-smoke-windows
+          path: fixture/windows/*
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: transfer-smoke-*
+          path: downloaded
+          merge-multiple: true
+      - name: Verify merged assets, checksums, and inventories
+        run: |
+          set -euo pipefail
+          test "$(find downloaded -type f | wc -l)" -eq 12
+          cd downloaded
+          for platform in linux macos-intel macos-arm64 windows; do
+            sha256sum --check "package-$platform.sha256"
+            test "$(cat "package-$platform.inventory.txt")" = "package-$platform.txt"
+            test "$(cat "package-$platform.txt")" = "artifact transfer fixture: $platform"
+          done
+
   required:
     name: Required tests
     if: always()
-    needs: [scope, batch4, windows-python]
+    needs: [scope, batch4, windows-python, artifact-transfer]
     runs-on: ubuntu-latest
     steps:
       - name: Confirm the tests required for this change passed
@@ -115,11 +173,13 @@ jobs:
           FULL_CI: ${{ needs.scope.outputs.full_ci }}
           BATCH_RESULT: ${{ needs.batch4.result }}
           WINDOWS_RESULT: ${{ needs.windows-python.result }}
+          ARTIFACT_RESULT: ${{ needs.artifact-transfer.result }}
         run: |
           test "$SCOPE_RESULT" = success
           if [ "$FULL_CI" = true ]; then
             test "$BATCH_RESULT" = success
             test "$WINDOWS_RESULT" = success
+            test "$ARTIFACT_RESULT" = success
           else
             test "$FULL_CI" = false
           fi
